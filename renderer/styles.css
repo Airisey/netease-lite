@@ -1,0 +1,1285 @@
+/* ============================================================
+   网易云音乐 Lite — 样式
+   深色主题 / 现代扁平 / 强调流畅感
+   ============================================================ */
+
+:root {
+  --accent: #ec4141;
+  --accent-soft: rgba(236, 65, 65, 0.14);
+  --accent-hi: #ff5c5c;
+
+  --bg-0: #16161a;
+  --bg-1: #1c1c21;
+  --bg-2: #232329;
+  --bg-3: #2b2b32;
+  --bg-4: #35353d;
+  --bg-hover: rgba(255, 255, 255, 0.055);
+  --bg-active: rgba(255, 255, 255, 0.09);
+
+  --text-0: #f2f2f4;
+  --text-1: #b9b9c2;
+  --text-2: #85858f;
+  --text-3: #5f5f69;
+
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.12);
+
+  --tb-h: 52px;
+  --pb-h: 74px;
+  --side-w: 224px;
+
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI",
+               "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  font-size: 13px;
+  color: var(--text-0);
+  background: var(--bg-0);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+body { display: flex; flex-direction: column; }
+
+/* ---- 从小窗回到主界面：浮现入场（第 4 点） ----
+   主进程先发 window:appear，渲染进程挂上这个类并强制重排，再回执让它 show()。
+   这样窗口显示出来的第一帧就已经是动画的起始状态（透明 + 下移），不会先闪一帧
+   完整界面再跳回透明重来。动画跑完把类摘掉，下次还能重新触发。 */
+body.app-appear { animation: appAppear .28s var(--ease) both; }
+@keyframes appAppear {
+  from { opacity: 0; transform: translateY(14px) scale(.992); }
+  to { opacity: 1; transform: none; }
+}
+/* 关掉界面动效时不要这一段，也不留残留的 transform */
+body.no-anim.app-appear { animation: none; }
+
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input, textarea, select { font: inherit; color: inherit; }
+svg { display: block; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.11); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); background-clip: content-box; }
+
+/* ============================ 标题栏 ============================ */
+.titlebar {
+  height: var(--tb-h);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 12px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+  /* 标题栏自己**不**抬层级（m02599 第②点）：上一版把整条抬到 z-index 70，
+     结果播放页顶上被这条不透明的栏切掉一截 —— 用户要的不是「顶栏盖住播放页」，
+     而是「播放页照旧铺满整屏，只有右上角那 7 个按钮浮在它上面」。
+     所以这里保持 `z-index: auto`（它就不生成层叠上下文，背景照常被 z-index 60 的
+     播放页盖住），由下面的 `.tb-right` 单独抬到播放页之上。
+     `position: relative` 仍然要留：它是 `.tb-right` 的包含块，也是让它日后能加
+     z-index 的前提。 */
+  position: relative;
+  z-index: auto;
+}
+.titlebar button, .titlebar input, .titlebar select, .tb-search { -webkit-app-region: no-drag; }
+
+.tb-left { display: flex; align-items: center; gap: 4px; }
+.tb-logo {
+  width: 28px; height: 28px; border-radius: 7px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--accent), #b32b2b);
+  color: #fff; margin-right: 6px;
+  box-shadow: 0 2px 8px rgba(236,65,65,0.3);
+}
+/* 左上角图标与打包 exe 的应用图标同形（assets/logo.svg 是从 icon-mono.svg
+   裁到包围盒的单色版）。做成 mask 而不是 <img>，是为了让形状吃 currentColor ——
+   皮肤只要照旧改 .tb-logo 的 color 与 background，图标就跟着变，
+   不必每款皮肤再准备一张图。 */
+.tb-logo-mark {
+  width: 19px; height: 19px;
+  background: currentColor;
+  -webkit-mask-image: url(assets/logo.svg);
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+  mask-image: url(assets/logo.svg);
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+}
+.tb-nav {
+  width: 30px; height: 30px; border-radius: 7px;
+  display: grid; place-items: center;
+  color: var(--text-1);
+  transition: background .13s var(--ease), color .13s var(--ease);
+}
+.tb-nav:hover { background: var(--bg-hover); color: var(--text-0); }
+.tb-nav:active { background: var(--bg-active); }
+.tb-nav[disabled] { opacity: .3; pointer-events: none; }
+
+.tb-search {
+  flex: 1 1 auto;
+  max-width: 420px;
+  margin: 0 auto;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 0 11px;
+  background: var(--bg-3);
+  border: 1px solid transparent;
+  border-radius: 16px;
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.tb-search:focus-within { border-color: var(--accent); background: var(--bg-4); }
+.tb-search-icon { color: var(--text-2); flex: 0 0 auto; }
+.tb-search input {
+  flex: 1 1 auto; min-width: 0;
+  background: none; border: none; outline: none;
+  color: var(--text-0); font-size: 13px;
+}
+.tb-search input::placeholder { color: var(--text-3); }
+.tb-search-clear { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; color: var(--text-2); flex: 0 0 auto; }
+.tb-search-clear:hover { background: var(--bg-hover); color: var(--text-0); }
+
+/* 播放页上唯一该浮着的东西就在这里（m02599 第②点）：皮肤 / 设置 / 两个小窗 /
+   最小化 / 最大化 / 关闭。父级 `.titlebar` 是 `z-index: auto`（不生成层叠上下文），
+   所以这里的 70 是拿到根层叠上下文里和 `.nowplaying`(60) 比 —— 整条栏的底色留在
+   播放页下面，只有这一簇按钮浮上来，连展开的皮肤菜单一起。 */
+.tb-right { display: flex; align-items: center; gap: 2px; margin-left: auto; position: relative; z-index: 70; }
+.tb-close:hover { background: #e81123 !important; color: #fff !important; }
+
+/* ============================ 布局 ============================ */
+.shell { flex: 1 1 auto; display: flex; min-height: 0; }
+
+/* ============================ 侧栏 ============================ */
+.sidebar {
+  width: var(--side-w);
+  flex: 0 0 auto;
+  background: var(--bg-1);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.side-nav { padding: 6px 8px; flex: 0 0 auto; }
+.side-nav.side-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; min-height: 0; padding-bottom: 8px; }
+
+.side-group {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 8px 5px;
+  font-size: 11px; font-weight: 600; letter-spacing: .4px;
+  color: var(--text-3); text-transform: uppercase;
+}
+/* 折叠按钮：整块标题可点，箭头指示展开 / 收起 */
+.side-fold {
+  display: flex; align-items: center; gap: 3px;
+  color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit;
+  padding: 0; margin-left: -3px;
+}
+.side-fold:hover { color: var(--text-1); }
+.side-fold .fold-arrow { flex: 0 0 auto; transition: transform .16s var(--ease); }
+.side-group.collapsed .side-fold .fold-arrow { transform: rotate(-90deg); }
+/* 收起的列表整块隐藏 */
+.side-list.collapsed { display: none; }
+.side-add {
+  width: 18px; height: 18px; border-radius: 4px;
+  display: grid; place-items: center; color: var(--text-3);
+}
+.side-add:hover { background: var(--bg-hover); color: var(--text-0); }
+
+.side-item {
+  display: flex; align-items: center; gap: 9px;
+  height: 34px; padding: 0 9px; margin-bottom: 1px;
+  border-radius: var(--radius);
+  color: var(--text-1); font-size: 13px;
+  cursor: pointer;
+  transition: background .12s var(--ease), color .12s var(--ease);
+}
+.side-item svg { flex: 0 0 auto; color: var(--text-2); transition: color .12s var(--ease); }
+.side-item span:not(.side-badge):not(.side-count):not(.side-pl-count) { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-item:hover { background: var(--bg-hover); color: var(--text-0); }
+.side-item:hover svg { color: var(--text-1); }
+.side-item.active { background: var(--accent-soft); color: var(--accent-hi); font-weight: 500; }
+.side-item.active svg { color: var(--accent); }
+.side-count { font-size: 11px; color: var(--text-3); flex: 0 0 auto; }
+/* 歌单行的曲目数与「我喜欢的音乐」那一栏同样右对齐、同样字号颜色 */
+.side-pl-count {
+  font-size: 11px; color: var(--text-3);
+  flex: 0 0 auto; margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.side-item:hover .side-pl-count { color: var(--text-2); }
+/* 歌单行开头的「第一首歌封面」缩略图；未加载时是一块占位底色 */
+.side-pl-cover {
+  flex: 0 0 auto;
+  width: 18px; height: 18px;
+  border-radius: 4px;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-3);
+  transition: opacity .18s var(--ease);
+}
+.side-pl-cover:not([src]) { opacity: .5; }
+/* 有缩略图后行内间隙可以收紧一点，给歌名留更多宽度 */
+.side-pl:has(.side-pl-cover[src]) { gap: 8px; }
+.side-badge {
+  font-size: 9px; font-weight: 700; letter-spacing: .5px;
+  padding: 1px 5px; border-radius: 8px;
+  background: var(--accent); color: #fff; flex: 0 0 auto;
+}
+.side-list { display: flex; flex-direction: column; }
+
+.side-foot { flex: 0 0 auto; padding: 8px; border-top: 1px solid var(--line); }
+.login-btn {
+  width: 100%; height: 36px; border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  background: var(--bg-3); color: var(--text-1); font-size: 13px;
+  transition: background .14s var(--ease), color .14s var(--ease);
+}
+.login-btn:hover { background: var(--accent); color: #fff; }
+
+.user-chip {
+  display: flex; align-items: center; gap: 9px;
+  padding: 5px 6px; border-radius: var(--radius); cursor: pointer;
+  transition: background .12s var(--ease);
+}
+.user-chip:hover { background: var(--bg-hover); }
+.user-chip .uc-avatar { position: relative; flex: 0 0 auto; width: 30px; height: 30px; }
+.user-chip .uc-avatar img { width: 30px; height: 30px; border-radius: 50%; display: block; background: var(--bg-3); }
+.user-chip .uc-vip {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 14px; height: 14px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent); color: #fff;
+  border: 1.5px solid var(--bg-2);
+}
+.user-chip .uc-meta { min-width: 0; flex: 1 1 auto; }
+.user-chip .uc-name { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-chip .uc-sub { font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-chip .uc-out { color: var(--text-3); flex: 0 0 auto; opacity: 0; transition: opacity .12s var(--ease); }
+.user-chip:hover .uc-out { opacity: 1; }
+.user-chip .uc-out:hover { color: var(--accent); }
+
+/* ============================ 主区 ============================ */
+.main { flex: 1 1 auto; min-width: 0; background: var(--bg-0); position: relative; }
+.main-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; }
+.main-scroll.fade-in { animation: fadeUp .26s var(--ease); }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+
+.page { padding: 22px 26px 34px; max-width: 1400px; }
+
+.page-head { margin-bottom: 18px; }
+.page-title { font-size: 22px; font-weight: 700; letter-spacing: -.2px; }
+.page-sub { margin-top: 5px; font-size: 12px; color: var(--text-2); }
+
+.section { margin-bottom: 28px; }
+.section-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 13px; }
+.section-title { font-size: 15px; font-weight: 600; }
+.section-more { font-size: 12px; color: var(--text-2); margin-left: auto; cursor: pointer; }
+.section-more:hover { color: var(--text-0); }
+
+/* ---- 歌单/卡片网格 ---- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 18px 16px;
+}
+.card { cursor: pointer; }
+.card-cover {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-2);
+  margin-bottom: 8px;
+}
+.card-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-cover::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,.42), transparent 55%);
+  opacity: 0; transition: opacity .18s var(--ease);
+}
+.card:hover .card-cover::after { opacity: 1; }
+.card-play {
+  position: absolute; right: 9px; bottom: 9px; z-index: 2;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent); color: #fff;
+  box-shadow: 0 4px 14px rgba(236,65,65,.45);
+  opacity: 0; transform: translateY(6px) scale(.9);
+  transition: opacity .18s var(--ease), transform .18s var(--ease);
+}
+.card:hover .card-play { opacity: 1; transform: none; }
+.card-play:hover { background: var(--accent-hi); }
+.card-count {
+  position: absolute; left: 8px; top: 7px; z-index: 2;
+  display: flex; align-items: center; gap: 3px;
+  font-size: 11px; color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,.7);
+}
+.card-name {
+  font-size: 12.5px; line-height: 1.45; color: var(--text-0);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card:hover .card-name { color: var(--accent-hi); }
+.card-sub { margin-top: 3px; font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- 歌单详情头 ---- */
+.pl-head { display: flex; gap: 22px; margin-bottom: 26px; }
+.pl-cover {
+  width: 184px; height: 184px; flex: 0 0 auto;
+  border-radius: var(--radius-lg); overflow: hidden;
+  background: var(--bg-2); box-shadow: var(--shadow);
+}
+.pl-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pl-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.pl-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  align-self: flex-start;
+  font-size: 11px; padding: 2px 7px; border-radius: 4px;
+  border: 1px solid var(--accent); color: var(--accent);
+  margin-bottom: 9px;
+}
+.pl-name { font-size: 23px; font-weight: 700; line-height: 1.28; margin-bottom: 11px; }
+.pl-creator { display: flex; align-items: center; gap: 7px; margin-bottom: 11px; font-size: 12.5px; }
+.pl-creator img { width: 22px; height: 22px; border-radius: 50%; }
+.pl-creator .pl-cname { color: #6ea8e8; cursor: pointer; }
+.pl-creator .pl-cname:hover { text-decoration: underline; }
+.pl-creator .pl-time { color: var(--text-3); }
+.pl-desc {
+  font-size: 12px; color: var(--text-2); line-height: 1.6;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  margin-bottom: 12px; cursor: pointer;
+}
+.pl-desc.open { -webkit-line-clamp: unset; }
+.pl-stats { display: flex; gap: 18px; font-size: 12px; color: var(--text-2); margin-bottom: 16px; }
+.pl-stats b { color: var(--text-0); font-weight: 600; }
+.pl-actions { display: flex; gap: 10px; align-items: center; margin-top: auto; }
+/* 多选按钮推到最右（用户 m34266 要求「在右侧添加」）。margin-left:auto 而不是
+   给前面所有按钮加 flex，这样「收藏歌单」有无都不会影响它的位置。
+
+   m35069 第 2 点要求「本地扫描」在多选左边，所以 auto 边距挪到了它身上：
+   flex 会把剩余空间分给所有 auto 边距，两个都写就会把它们撑开，
+   只留一个、让多选紧跟着它即可。 */
+.pl-actions .pl-scan { margin-left: auto; }
+.pl-actions .pl-multi { margin-left: 0; }
+.pl-actions .pl-multi.on { border-color: var(--accent); color: var(--accent-hi); background: var(--accent-soft); }
+
+/* ---- 歌曲列表多选（m34266 第 1 点）----
+   多选时整行是复选框，所以那个方块只在 .selecting 下出现；非多选模式它对
+   布局零影响（display:none），行高与列宽与从前完全一致。
+
+   ⚠️ 形状（尺寸 / 圆角 / 边框）写在裸 `.tl-check` 上，只有「显示与否」挂在
+   `.tracklist.selecting` 下。原因：皮肤的去圆角规则是
+   `html[data-skin="x"] .tl-check`（特指度 0,2,1），如果形状规则带上
+   `.tracklist.selecting`（0,3,0）就会把它压过去，瑞士风 / 街机风的方块会
+   一直留着 3px 圆角。 */
+.tl-check {
+  display: none;
+  place-items: center;
+  width: 18px; height: 18px; flex: 0 0 auto;
+  border: 1.5px solid var(--text-3); border-radius: 3px;
+  color: transparent;
+  transition: background .12s var(--ease), border-color .12s var(--ease), color .12s var(--ease);
+}
+.tl-selbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 10px 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 2px;
+}
+.tl-sel-count {
+  font-size: 12.5px; color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+/* 有选中项时计数提亮一档，一眼看得出「已经选上了」。用 .has 而不是 :has()，
+   免得多一处依赖较新的选择器。 */
+.tl-selbar.has .tl-sel-count { color: var(--text-0); }
+.tl-selacts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.tl-selacts .btn-outline { height: 30px; padding: 0 12px; font-size: 12.5px; }
+.tl-selacts .btn-outline:disabled { opacity: .45; cursor: default; }
+.tl-selacts .btn-outline:disabled:hover { background: none; border-color: var(--line-2); color: var(--text-1); }
+/* 删除是破坏性操作，给它一个红色描边，别和「添加到」长一样。
+   红色写死不走 --accent：强调色是黄/蓝的皮肤下，删除按钮变成品牌色会丢掉
+   "这是危险操作"的语义。light-dark() 读的是 color-scheme，五款皮肤自动分档。
+   ⚠️ 选择器前面那个 `html[data-skin]` 是为了特指度（0,3,1）：皮肤的
+   `html[data-skin="arcade"] :is(.btn-outline, …)` 是（0,2,1），光靠
+   `.btn-outline.btn-danger`（0,2,0）压不住，街机风下删除按钮会变成墨黑、
+   和普通按钮长得一模一样。 */
+html[data-skin] .btn-outline.btn-danger { border-color: color-mix(in srgb, #d9534f 55%, var(--line-2)); color: light-dark(#b3261e, #e8908a); }
+html[data-skin] .btn-outline.btn-danger:hover:not(:disabled) { background: color-mix(in srgb, #d9534f 14%, transparent); border-color: #d9534f; color: light-dark(#8c1f1f, #f2a9a4); }
+
+.tracklist.selecting .tl-check { display: grid; }
+/* 多选模式下号码让位给复选框：两者都在 .tl-slot 里，叠着会挤成一团 */
+.tracklist.selecting .tl-row .tl-slot .tl-num { display: none; }
+.tracklist.selecting .tl-row .tl-slot .tl-acts { display: none; }
+.tracklist.selecting .tl-row { cursor: pointer; }
+.tl-row.selected { background: var(--accent-soft); }
+/* 勾选块用强调色填充 + 白勾，跟 .card-play / .btn-play-all 那一家子同款；
+   街机风会把白勾覆盖成墨勾（黄底白勾只有 1.3:1）。 */
+.tl-row.selected .tl-check {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff;
+}
+.tl-row.selected .tl-name, .tl-row.selected .tl-idx { color: var(--accent-hi); }
+/* 选中行的红心与「√」不再抢眼：当前操作对象是整批歌，不是某一首的
+   喜欢 / 下载状态（m35069 加「√」时一并纳入）。 */
+.tracklist.selecting .tl-like,
+.tracklist.selecting .tl-dl { opacity: .3; pointer-events: none; }
+.btn-play-all {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 33px; padding: 0 17px; border-radius: 17px;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 500;
+  transition: background .14s var(--ease), transform .1s var(--ease);
+}
+.btn-play-all:hover { background: var(--accent-hi); }
+.btn-play-all:active { transform: scale(.97); }
+.btn-outline {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 33px; padding: 0 15px; border-radius: 17px;
+  border: 1px solid var(--line-2); color: var(--text-1); font-size: 13px;
+  transition: background .14s var(--ease), border-color .14s var(--ease), color .14s var(--ease);
+}
+.btn-outline:hover { background: var(--bg-hover); border-color: var(--text-3); color: var(--text-0); }
+.btn-outline:disabled { opacity: .55; cursor: default; }
+/* 已关注态：红边红字，与未关注的灰边灰字拉开差别 */
+.btn-outline.on { border-color: var(--accent); color: var(--accent-hi); }
+.btn-outline.on:hover { background: var(--accent-soft); border-color: var(--accent-hi); color: var(--accent-hi); }
+
+/* ---- 歌曲列表 ---- */
+.tracklist { width: 100%; }
+.tl-head, .tl-row {
+  display: grid;
+  /* 第一列 78px = 序号槽 34 + 红心 20 + 「√」20 + 两个 2px 间距（m35069 第 1 点）。
+     原来 64px 只放得下红心，再加一个按钮就会顶出去。加宽的是定尺列，缺的
+     那 14px 由后面的 fr 列吸收 —— 整行宽度不变，只有标题列窄了一点。 */
+  grid-template-columns: 78px minmax(0, 2.1fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 62px;
+  align-items: center;
+  gap: 10px;
+}
+.tl-head {
+  height: 32px; padding: 0 10px;
+  font-size: 12px; color: var(--text-3);
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 3;
+  background: var(--bg-0);
+}
+.tl-head .tl-c { cursor: default; }
+.tl-body { padding-top: 2px; }
+.tl-row {
+  height: 44px; padding: 0 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: default;
+  transition: background .1s var(--ease);
+}
+.tl-row:hover { background: var(--bg-hover); }
+.tl-row.playing { background: var(--accent-soft); }
+.tl-row.playing .tl-name, .tl-row.playing .tl-idx { color: var(--accent-hi); }
+.tl-row.disabled { opacity: .42; }
+
+.tl-idx { display: flex; align-items: center; gap: 2px; color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* The number/play-button pair shares one fixed-width box so rows do not shift
+   sideways on hover; the heart sits outside it and is always visible. */
+.tl-slot { width: 34px; display: flex; align-items: center; }
+.tl-row:hover .tl-slot .tl-num { display: none; }
+.tl-row:hover .tl-slot .tl-acts { display: flex; }
+.tl-acts { display: none; align-items: center; gap: 3px; }
+.tl-act { width: 20px; height: 20px; border-radius: 4px; display: grid; place-items: center; color: var(--text-2); }
+.tl-act:hover { background: var(--bg-active); color: var(--text-0); }
+.tl-act.on { color: var(--accent); }
+/* 常驻红心：不再依赖 hover，未收藏用暗色避免整列抢眼 */
+.tl-like { color: var(--text-3); opacity: .55; transition: opacity .12s var(--ease), color .12s var(--ease); }
+.tl-row:hover .tl-like { opacity: 1; }
+.tl-like:hover { color: var(--accent-hi); }
+.tl-like.on { color: var(--accent); opacity: 1; }
+
+/* 「√」= 这首歌本机有没有音频（m35069 第 1 点）。
+   未下载时是低调的下载箭头（和红心一样默认半透明，鼠标进到行里才显出来），
+   已下载时是实心的对勾。颜色走 accent 而不是写死绿色：皮肤换的是强调色，
+   写死绿色在街机风的黄底上会糊成一片。 */
+.tl-dl { color: var(--text-3); opacity: .55; transition: opacity .12s var(--ease), color .12s var(--ease); }
+.tl-row:hover .tl-dl { opacity: 1; }
+.tl-dl:hover { color: var(--accent-hi); }
+.tl-dl.on { color: var(--accent); opacity: 1; }
+.tl-num { font-size: 12px; }
+.tl-eq { display: flex; align-items: flex-end; gap: 1.5px; height: 12px; }
+.tl-eq i { width: 2px; background: var(--accent); border-radius: 1px; animation: eq .9s ease-in-out infinite; }
+.tl-eq i:nth-child(1) { height: 40%; animation-delay: 0s; }
+.tl-eq i:nth-child(2) { height: 90%; animation-delay: .18s; }
+.tl-eq i:nth-child(3) { height: 60%; animation-delay: .36s; }
+@keyframes eq { 0%,100% { transform: scaleY(.4); } 50% { transform: scaleY(1); } }
+
+.tl-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* 标题前的封面缩略图：固定尺寸，不参与压缩，缺图时留同宽的占位块 */
+.tl-cover {
+  flex: 0 0 auto; width: 32px; height: 32px; border-radius: 4px;
+  object-fit: cover; background: var(--bg-3);
+  transition: transform .15s var(--ease);
+}
+.tl-row:hover .tl-cover { transform: scale(1.06); }
+.tl-cover-empty { display: block; }
+/* 歌名优先：basis 为 auto，只有歌名 + 标签本身就撑爆时才收缩 */
+.tl-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 后缀（别名）只吃歌名剩下的空间：basis 为 0，所以永远不会反过来挤压歌名；
+   放不下时由 JS 加 .scrolling 让内容循环滚动（见 views.js 的 measureAlias）。
+   min-width 保证后缀始终有一小块可见区域，不会在超长歌名下彻底消失。
+   左右各用「负外边距 + 等量内边距」把盒子向外撑出去一点点：布局占位不变，
+   但滚动窗口更宽，文字从两端进出时有更长的过渡区 */
+.tl-alias {
+  flex: 1 1 0; min-width: 96px; position: relative; overflow: hidden;
+  color: var(--text-3); font-size: 12px;
+  margin-left: -4px; margin-right: -6px;
+  padding-left: 4px; padding-right: 6px;
+  --alias-fade: 12px;
+}
+.tl-alias-in { display: inline-flex; white-space: nowrap; }
+/* 段尾留出的间隙：JS 测量的是「含 padding 的段宽」，动画平移 -50% 正好走完一整段 */
+.tl-alias-seg { padding-right: 28px; }
+/* 第二份只在滚动时出现；否则放得下的后缀会重复显示一遍 */
+.tl-alias-seg + .tl-alias-seg { display: none; }
+.tl-alias.scrolling .tl-alias-seg + .tl-alias-seg { display: inline; }
+.tl-alias.scrolling .tl-alias-in {
+  will-change: transform;
+  animation: alias-loop var(--alias-dur, 12s) linear infinite;
+}
+/* 两端渐隐渐现：滚动的文字在左右边缘淡出 / 淡入，而不是被硬边切成半截字。
+   只在滚动时挂，否则放得下的短后缀两端也会发虚 */
+.tl-alias.scrolling {
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--alias-fade), #000 calc(100% - var(--alias-fade)), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--alias-fade), #000 calc(100% - var(--alias-fade)), transparent 100%);
+}
+@keyframes alias-loop { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+/* 歌名自己都放不下时，后缀整块让位，把宽度全留给歌名（JS 判定，见 views.js 的 measureAliasBox） */
+.tl-alias.yielded { display: none; }
+/* 用户要求减少动效时退回静态截断，不滚动（第二份副本也必须藏起来，否则文字会重复） */
+@media (prefers-reduced-motion: reduce) {
+  .tl-alias.scrolling .tl-alias-in { animation: none; }
+  .tl-alias.scrolling .tl-alias-seg + .tl-alias-seg { display: none; }
+  .tl-alias.scrolling { mask-image: none; -webkit-mask-image: none; }
+}
+/* MV / VIP 统一靠标题格右侧：margin-left:auto 吃掉所有剩余空间。
+   有后缀时剩余空间已被 .tl-alias 的 flex-grow 占满，auto 边距为 0，
+   标签就紧贴后缀右端；后缀让位（.yielded）或本来没有时，auto 边距生效，
+   标签被顶到最右边 —— 两种情况下右边缘都在同一竖线上 */
+.tl-tags { margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
+.tl-tag {
+  flex: 0 0 auto; font-size: 9px; font-weight: 700;
+  padding: 0 3px; border-radius: 3px; line-height: 13px;
+  border: 1px solid currentColor;
+}
+.tl-tag.sq { color: #d4a24c; }
+.tl-tag.mv { color: #6ea8e8; }
+.tl-tag.vip { color: #e0605f; }
+/* 每日推荐的推荐理由（"超75%人播放"）。它不是 MV/VIP 那种两字母角标，
+   而是一小句话，所以去掉描边、字号收回 10px，并限宽省略，避免把
+   标题格挤窄（.tl-tags 是 margin-left:auto，宽了就直接吃掉标题的空间）。 */
+.tl-tag.rec {
+  border: none; padding: 0; font-size: 10px; font-weight: 500;
+  color: var(--text-3); max-width: 96px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tl-artist, .tl-album { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.tl-artist:hover, .tl-album:hover { color: var(--text-0); }
+.tl-artist a, .tl-album a { color: inherit; cursor: pointer; }
+.tl-artist a:hover, .tl-album a:hover { color: var(--text-0); text-decoration: underline; }
+.tl-dur { color: var(--text-3); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---- 骨架屏 / 空态 ---- */
+.skeleton { border-radius: var(--radius); background: linear-gradient(100deg, var(--bg-2) 30%, var(--bg-3) 50%, var(--bg-2) 70%); background-size: 220% 100%; animation: shimmer 1.3s linear infinite; }
+@keyframes shimmer { from { background-position: 180% 0; } to { background-position: -80% 0; } }
+.sk-row { height: 44px; margin-bottom: 4px; }
+.sk-card { aspect-ratio: 1; border-radius: var(--radius-lg); }
+
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 74px 20px; color: var(--text-3); }
+.empty svg { opacity: .3; }
+.empty-text { font-size: 13px; }
+.empty-hint { font-size: 12px; color: var(--text-3); }
+
+/* ---- 用户主页 ---- */
+.user-head {
+  position: relative; border-radius: var(--radius-lg); overflow: hidden;
+  background: var(--bg-2); border: 1px solid var(--line); margin-bottom: 6px;
+}
+.uh-bg {
+  height: 148px;
+  background: linear-gradient(120deg, rgba(236,65,65,.28), rgba(236,65,65,.06) 60%, transparent);
+  background-size: cover; background-position: center;
+}
+.uh-body { display: flex; gap: 18px; align-items: flex-start; padding: 0 22px; }
+/* 只有头像上浮压住背景；昵称 / VIP 标 / 加入时间 / 签名一律排在背景下沿之外，
+   不再落进上面那张 148px 的背景图里 */
+.uh-avatar { position: relative; flex: 0 0 auto; margin-top: -48px; }
+.uh-avatar img {
+  width: 96px; height: 96px; border-radius: 50%; display: block;
+  object-fit: cover; background: var(--bg-3);
+  border: 3px solid var(--bg-2); box-shadow: var(--shadow);
+}
+.uh-vip {
+  position: absolute; right: 2px; bottom: 2px;
+  padding: 2px 7px; border-radius: 9px;
+  font-size: 10px; font-weight: 700; letter-spacing: .4px;
+  background: linear-gradient(120deg, #f7b500, var(--accent)); color: #fff;
+  border: 2px solid var(--bg-2);
+}
+.uh-info { flex: 1 1 auto; min-width: 0; padding-top: 12px; }
+/* 昵称+加入时间+签名合成左侧一整块，五个统计块紧随其后，签到按钮贴最右。
+   统计块原来是页头下方横跨整卡的独立一行（带 border-top），现在收进这一行里，
+   所以要把那套「整行居中」的样式全部去掉。 */
+.uh-toprow { display: flex; align-items: center; gap: 22px; }
+/* 左侧大块：昵称 / 加入时间 / 签名三行叠在一起，宽度按内容走但允许压缩 */
+.uh-main { flex: 1 1 auto; min-width: 0; }
+.uh-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 22px; font-weight: 700; }
+/* 昵称过长时省略，别把右边的统计块和签到按钮挤出这一行 */
+.uh-nick { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+/* 红色镂空 VIP 标：只留描边和红字，不要实心底 */
+.uh-vip-tag {
+  padding: 1px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  color: var(--accent-hi); background: transparent;
+  border: 1.5px solid var(--accent);
+}
+.uh-meta { margin-top: 5px; font-size: 12px; color: var(--text-3); }
+.uh-sign {
+  margin-top: 8px; font-size: 12.5px; color: var(--text-2); line-height: 1.6;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+/* 五个统计块：夹在左侧大块和签到按钮中间。
+   数字和标签都比原来大一号（15→19px / 11→12.5px），间距也拉开，
+   让它们从「一行小字」变成能一眼看清的五个独立块。 */
+.uh-stats {
+  display: flex; gap: 14px; align-items: center;
+  flex: 0 1 auto; min-width: 0;
+}
+/* 可点项是 <button>，要抹掉浏览器默认的按钮外观 */
+.uh-stat {
+  display: flex; flex-direction: column; gap: 2px; align-items: center;
+  padding: 6px 12px; margin: -6px -12px; border-radius: 9px;
+  background: none; border: 0; font: inherit; color: inherit; text-align: center;
+}
+.uh-stat[data-stat] { cursor: pointer; transition: background .14s var(--ease); }
+.uh-stat[data-stat]:hover { background: var(--bg-hover); }
+.uh-stat[data-stat]:hover b { color: var(--accent-hi); }
+.uh-stat b { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.uh-stat span { font-size: 12.5px; color: var(--text-3); line-height: 1.2; }
+/* 按钮永远贴最右：统计块数量变化（他人主页没有歌单统计时也一样）不会让按钮漂移 */
+.uh-actions { flex: 0 0 auto; margin-left: auto; }
+
+/* ---- 等级详情 ---- */
+.lv-bar { height: 8px; border-radius: 4px; background: var(--bg-3); overflow: hidden; margin-bottom: 18px; }
+.lv-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width .3s var(--ease); }
+.lv-rows { display: flex; flex-direction: column; gap: 2px; }
+.lv-row {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 42px; padding: 0 14px; border-radius: var(--radius); background: var(--bg-2);
+}
+.lv-row span { font-size: 13px; color: var(--text-2); }
+.lv-row b { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ---- 用户卡片（关注 / 粉丝列表） ---- */
+.ucard {
+  display: flex; align-items: center; gap: 12px; padding: 12px;
+  border-radius: var(--radius-lg); background: var(--bg-2);
+  border: 1px solid transparent; cursor: pointer; transition: background .14s var(--ease), border-color .14s var(--ease);
+}
+.ucard:hover { background: var(--bg-3); border-color: var(--line); }
+.ucard-avatar { flex: 0 0 auto; width: 46px; height: 46px; }
+.ucard-avatar img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; display: block; background: var(--bg-3); }
+.ucard-meta { flex: 1 1 auto; min-width: 0; }
+.ucard-name { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ucard-vip {
+  flex: 0 0 auto; padding: 0 5px; border-radius: 7px; font-size: 9px; font-weight: 700;
+  color: var(--accent-hi); border: 1px solid var(--accent);
+}
+.ucard-sub { margin-top: 3px; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.ucard-sign { margin-top: 3px; font-size: 11.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ucard-mutual { flex: 0 0 auto; font-size: 10px; padding: 1px 6px; border-radius: 8px; background: var(--bg-hover); color: var(--text-2); }
+
+/* ---- 每日推荐头 ---- */
+.daily-head { display: flex; align-items: center; gap: 20px; margin-bottom: 24px; padding: 20px 22px; border-radius: var(--radius-lg); background: linear-gradient(120deg, rgba(236,65,65,.16), rgba(236,65,65,.03) 62%); border: 1px solid rgba(236,65,65,.18); }
+.daily-date { text-align: center; flex: 0 0 auto; }
+.daily-day { font-size: 40px; font-weight: 800; line-height: 1; color: var(--accent-hi); font-variant-numeric: tabular-nums; }
+.daily-mon { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+.daily-txt { flex: 1 1 auto; min-width: 0; }
+.daily-txt h2 { font-size: 19px; font-weight: 700; margin-bottom: 6px; }
+.daily-txt p { font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
+
+/* ---- 搜索 ---- */
+.search-tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
+.search-tab { position: relative; padding: 9px 15px; font-size: 13.5px; color: var(--text-2); border-radius: 6px 6px 0 0; }
+.search-tab:hover { color: var(--text-0); }
+.search-tab.active { color: var(--text-0); font-weight: 600; }
+.search-tab.active::after { content: ''; position: absolute; left: 15px; right: 15px; bottom: -1px; height: 2px; background: var(--accent); border-radius: 1px; }
+
+/* ---- 歌手/专辑详情 ---- */
+.artist-head { display: flex; gap: 20px; align-items: center; margin-bottom: 24px; }
+.artist-avatar { width: 128px; height: 128px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; box-shadow: var(--shadow); background: var(--bg-2); }
+.artist-meta h1 { font-size: 25px; font-weight: 700; margin-bottom: 9px; }
+.artist-meta .am-alias { font-size: 12.5px; color: var(--text-3); margin: -5px 0 9px; }
+.artist-meta .am-stats { display: flex; gap: 20px; font-size: 12.5px; color: var(--text-2); margin-bottom: 14px; }
+.artist-meta .am-stats b { color: var(--text-0); }
+.artist-meta .am-actions { display: flex; gap: 10px; align-items: center; }
+
+/* 歌手简介：身份标签 + 传记正文 */
+.ad-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.ad-tag { padding: 4px 10px; border-radius: 13px; font-size: 12px; color: var(--text-2); background: var(--bg-2); border: 1px solid var(--line); }
+.ad-tag b { color: var(--text-0); font-weight: 600; }
+.ad-desc { font-size: 13.5px; line-height: 1.85; color: var(--text-1); max-width: 900px; white-space: pre-wrap; }
+
+/* ============================ 播放条 ============================ */
+.playerbar {
+  height: var(--pb-h);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  background: var(--bg-1);
+  border-top: 1px solid var(--line);
+  position: relative;
+  z-index: 20;
+}
+/* 播放条顶部那条 2px 细进度线已删除（#pbProgressTop / #pbProgressFill）：
+   底部进度条已经显示同一信息，重复显示反而分散注意力。 */
+
+.pb-left { display: flex; align-items: center; gap: 11px; width: 296px; flex: 0 0 auto; min-width: 0; }
+.pb-cover { width: 46px; height: 46px; border-radius: var(--radius); overflow: hidden; background: var(--bg-3); flex: 0 0 auto; position: relative; cursor: pointer; }
+.pb-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pb-cover img:not([src]), .pb-cover img[src=""] { display: none; }
+.pb-cover-fallback { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-3); }
+.pb-cover img[src]:not([src=""]) ~ .pb-cover-fallback { display: none; }
+.pb-meta { min-width: 0; flex: 1 1 auto; }
+.pb-title { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.pb-title:hover { color: var(--accent-hi); }
+.pb-artist { font-size: 11.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; cursor: pointer; }
+.pb-artist:hover { color: var(--text-1); }
+.pb-like { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--text-3); flex: 0 0 auto; }
+.pb-like:hover { background: var(--bg-hover); color: var(--text-1); }
+.pb-like.on { color: var(--accent); }
+/* 红心右侧的评论按钮：与红心同形，紧挨着放。
+   `position: relative` 是给右上角的评论数角标做定位锚点。 */
+.pb-comment { position: relative; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--text-3); flex: 0 0 auto; }
+.pb-comment:hover { background: var(--bg-hover); color: var(--text-1); }
+/* 评论数角标：挂在按钮右上角、半个身子探到按钮外面。
+   用 `right: -5px` 而不是内嵌，是因为评论数常是 "197万" 这种 4 字串，
+   内嵌会把 28px 的按钮顶变形；外挂后数字向左展开，圆形按钮本身尺寸不受影响。
+   与队列角标共用同一套坐标（见下方 .pb-queue-count），两个角标在底栏里
+   才对得齐。 */
+.pb-badge {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 15px; height: 15px; padding: 0 4px;
+  border-radius: 8px; background: var(--accent); color: #fff;
+  font-size: 9.5px; font-weight: 700; line-height: 15px; text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.pb-center { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pb-controls { display: flex; align-items: center; gap: 5px; }
+.pb-btn { width: 31px; height: 31px; border-radius: 50%; display: grid; place-items: center; color: var(--text-1); transition: background .12s var(--ease), color .12s var(--ease); }
+.pb-btn:hover { background: var(--bg-hover); color: var(--text-0); }
+.pb-btn.active { color: var(--accent); }
+.pb-play { width: 37px; height: 37px; background: var(--bg-3); color: var(--text-0); margin: 0 4px; }
+.pb-play:hover { background: var(--accent); color: #fff; }
+.pb-play:active { transform: scale(.94); }
+.pb-mode { width: auto; padding: 0 9px; border-radius: 12px; font-size: 11.5px; }
+
+.pb-time-row { display: flex; align-items: center; gap: 9px; width: 100%; max-width: 560px; }
+.pb-time { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; flex: 0 0 auto; width: 34px; text-align: center; }
+.pb-track { flex: 1 1 auto; height: 14px; display: flex; align-items: center; position: relative; cursor: pointer; }
+.pb-track-bg { position: absolute; left: 0; right: 0; height: 3px; border-radius: 2px; background: rgba(255,255,255,.1); }
+.pb-track-fill { position: absolute; left: 0; height: 3px; border-radius: 2px; background: var(--accent); width: 0; }
+.pb-track-knob { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #fff; opacity: 0; transform: translateX(-50%); transition: opacity .13s var(--ease); box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.pb-track:hover .pb-track-knob, .pb-track.dragging .pb-track-knob { opacity: 1; }
+.pb-track:hover .pb-track-bg { height: 5px; }
+.pb-track:hover .pb-track-fill { height: 5px; }
+
+.pb-right { display: flex; align-items: center; gap: 3px; width: 268px; flex: 0 0 auto; justify-content: flex-end; }
+.pb-vol { width: 76px; height: 14px; display: flex; align-items: center; position: relative; cursor: pointer; margin: 0 4px; }
+.pb-vol-bg { position: absolute; left: 0; right: 0; height: 3px; border-radius: 2px; background: rgba(255,255,255,.1); }
+.pb-vol-fill { position: absolute; left: 0; height: 3px; border-radius: 2px; background: var(--text-1); width: 70%; }
+.pb-vol-knob { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #fff; opacity: 0; transform: translateX(-50%); transition: opacity .13s var(--ease); }
+.pb-vol:hover .pb-vol-knob { opacity: 1; }
+.pb-vol:hover .pb-vol-fill { background: var(--accent); }
+/* 队列数角标：与评论数角标同一套坐标，两个角标在底栏里对齐。
+   以前它是 `top:1px; right:1px`（缩在按钮里面），评论数是 `top:-4px; right:-7px`
+   （挂在按钮外面），同一排按钮上两种位置看着像两套控件。 */
+.pb-queue-count {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  border-radius: 7px; background: var(--accent); color: #fff;
+  font-size: 9px; font-weight: 700; line-height: 14px; text-align: center;
+}
+#btnQueue { position: relative; }
+
+/* ============================ 播放队列 ============================ */
+.queue-panel {
+  position: fixed; right: 0; bottom: var(--pb-h); width: 340px;
+  max-height: calc(100vh - var(--tb-h) - var(--pb-h) - 12px);
+  background: var(--bg-2); border: 1px solid var(--line-2); border-right: none;
+  border-radius: var(--radius-lg) 0 0 0;
+  box-shadow: var(--shadow);
+  display: flex; flex-direction: column;
+  /* 用户 m15635 第②点：播放列表要盖在所有界面之上。
+   * 原来是 25，比全屏播放页的 60 低 —— 在播放页点「播放列表」按钮，
+   * 面板确实打开了，但整块被播放页压在下面，看起来像没反应。
+   * 70 高于播放页(60)与标题栏(30)，仍低于弹窗(80)。 */
+  z-index: 70;
+  animation: slideIn .19s var(--ease);
+}
+@keyframes slideIn { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* 关闭播放列表：原路淡出，和 slideIn 完全对称。
+   `forwards` 把最后一帧钉住，否则动画一结束元素会弹回不透明状态，
+   在 hidden 生效之前闪一下。 */
+.queue-panel.qp-out { animation: qpOut .17s var(--ease) forwards; pointer-events: none; }
+@keyframes qpOut { from { transform: none; opacity: 1; } to { transform: translateX(24px); opacity: 0; } }
+.qp-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 15px; border-bottom: 1px solid var(--line); font-size: 13.5px; font-weight: 600; }
+.qp-head em { font-style: normal; color: var(--text-3); font-weight: 400; font-size: 12px; margin-left: 3px; }
+/* 队列面板里的两页签（播放队列 / 下载）在 m36690 第⑤点整体删掉了：下载搬去
+   侧栏「已下载音乐」独立页，面板只剩播放队列，`.qp-tabs` / `.qp-tab` 两条规则
+   连同它们的选择器一起移除，免得给后来的人留下「这里还能切页」的错觉。 */
+.qp-head-acts { display: flex; align-items: center; gap: 12px; }
+.qp-clear { font-size: 12px; color: var(--text-2); }
+.qp-clear:hover { color: var(--accent); }
+.qp-list { flex: 1 1 auto; overflow-y: auto; padding: 5px; min-height: 0; }
+.qp-item { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 6px; cursor: default; }
+.qp-item:hover { background: var(--bg-hover); }
+.qp-item.playing { background: var(--accent-soft); }
+.qp-item.playing .qp-name { color: var(--accent-hi); }
+.qp-idx { width: 18px; font-size: 11px; color: var(--text-3); text-align: center; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.qp-meta { flex: 1 1 auto; min-width: 0; }
+.qp-name { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qp-artist { font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+.qp-dur { font-size: 11px; color: var(--text-3); flex: 0 0 auto; }
+.qp-del { width: 20px; height: 20px; border-radius: 4px; display: grid; place-items: center; color: var(--text-3); flex: 0 0 auto; opacity: 0; }
+.qp-item:hover .qp-del { opacity: 1; }
+.qp-del:hover { background: var(--bg-active); color: var(--accent); }
+
+/* 下载行（第 5 点）。
+   和队列行共用 `.qp-item` 的外壳与 hover，但内容更高：任务可能带进度条，
+   失败时还多一行错误说明。`cursor` 保持 default —— 点一下整行没有动作，
+   要看进度、取消或打开文件夹都走行内的按钮，别让人以为行本身可点。
+
+   完成/失败两色用 `light-dark()` 而不是写死：绿字和红字在深底上要发亮、
+   在浅底上要压深，同一个 `#3fae6a` 在经典黑上是 6.04:1、到现代白只剩
+   2.64:1。`light-dark()` 读的正是 `color-scheme`，而它由 `Skins.apply()`
+   按皮肤设成 dark（经典黑 / 落日余晖）或 light（其余三款），所以这里不用
+   再往皮肤契约里加变量，五款皮肤自动各取所需。 */
+.qp-dl { align-items: flex-start; cursor: default; }
+.qp-dl-body { flex: 1 1 auto; min-width: 0; }
+/* VIP 金标：金底配白字只有 1.82:1，白色在这块金上根本读不出来，
+   所以这里用深墨色文字（7.49:1），而不是照抄 .uh-vip 的白字。 */
+.qp-dl-vip { display: inline-block; margin-left: 5px; padding: 0 4px; border-radius: 3px; font-size: 9px; font-weight: 700; line-height: 13px; color: #3d2b00; background: linear-gradient(120deg, #f7b500, #e0902a); vertical-align: 1px; }
+.qp-dl-bar { margin-top: 5px; height: 3px; border-radius: 2px; background: var(--bg-active); overflow: hidden; }
+.qp-dl-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .2s linear; }
+.qp-dl-err { margin-top: 3px; font-size: 11px; color: light-dark(#b3261e, #f28b84); }
+/* 状态文字固定宽度：进度百分比从 "9%" 跳到 "10%" 时右边缘不能来回抖 */
+.qp-dl-state { flex: 0 0 auto; min-width: 46px; text-align: right; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+/* 进行中的百分比借各皮肤自己的 --accent-hi：它在五款皮肤上压各自面板底
+   分别是 5.16 / 5.97 / 6.33 / 6.63 / 18.88，全部过 AA，不必另配一套。 */
+.qp-dl-state.running { color: var(--accent-hi); }
+/* 暂停是一个「进行中但停住了」的状态，用次要强调色，既不与失败的红混淆、
+   也比灰色更显眼（m00001 第①点）。 */
+.qp-dl-state.paused { color: var(--accent-hi); opacity: .78; }
+.qp-dl-state.done { color: light-dark(#1c7a44, #4fc47c); }
+.qp-dl-state.error { color: light-dark(#b3261e, #f28b84); }
+/* 下载行的按钮常显（不像队列行那样 hover 才出）：任务在跑的时候，
+   取消是这一行唯一有意义的操作，藏起来等于没有。 */
+.qp-dl .qp-del { opacity: 1; }
+.qp-empty { padding: 28px 0; text-align: center; font-size: 12.5px; color: var(--text-3); }
+
+/* ------------------- 已下载音乐（m36690 第⑤点 / m38831 第①②点） -------------------
+   下载列表原来住在 340px 宽的队列面板里，搬成整页之后有三处必须改：
+   · `.qp-list` 原本 `flex:1 1 auto` + `min-height:0`，那是给「面板这一列要自己
+     滚动」用的。整页里父容器是 `.page`（普通文档流），照抄会让列表高度塌成 0，
+     所以这里覆盖成 `auto` 高度。
+   · 首屏若只有一条记录，整页会显得很空 —— 用最小高度把标题、说明和列表的关系
+     撑稳，空态文字不会贴在页头下面。
+   · m38831 第①②点起，行改成和「最近播放」同一副长相：歌名左边 32px 封面
+     （复用 `.tl-cover`，五款皮肤的圆角/描边/底色规则自动生效），行高 44px、
+     圆角 6px、hover 底色全部向 `.tl-row` 看齐。页头也是同一套 `.page-head` +
+     `.daily-head`，两页放在一起看不出是两个人写的。
+   落盘路径不再显示（第②点）：一条绝对路径一百多个字符，既把行撑成两三行，也
+   没回答用户真正的问题。要找文件，行尾「打开所在文件夹」更快。 */
+.dl-page { padding: 0; min-height: 120px; overflow: visible; }
+/* 面板里的下载行为了塞下更多条是 top 对齐的；整页有封面，居中才和歌曲行一致。 */
+.dl-page .qp-dl {
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  align-items: center;
+}
+.dl-page .qp-dl:hover .tl-cover { transform: scale(1.06); }
+.dl-page .qp-name { font-size: 13px; }
+/* 面板里歌手行是 11px（省高度），整页跟 `.tl-artist` 的 12.5px 对齐 */
+.dl-page .qp-artist { font-size: 12.5px; }
+.dl-page .qp-dl-state { font-size: 12px; }
+
+/* ============================ 全屏播放 ============================ */
+/* `-webkit-app-region: no-drag` is what makes the full-screen page clickable.
+   The titlebar above it is a `drag` region, and Electron computes the window's
+   draggable area as "every drag rect minus every no-drag rect" without regard
+   to z-index or occlusion — so an overlay that merely paints on top still lets
+   the OS swallow clicks in the titlebar band (that is why the close button at
+   top:16px was dead). Declaring no-drag on the overlay punches the hole. */
+/* 全屏页停在底栏之上：`bottom` 留出播放条的高度，这样底栏（z-index 20）不会被
+   遮住，用户在全屏页里也能直接用与主页面完全相同的那一条播放条，而不是再做一个
+   副本。播放条是同一个 DOM 元素，状态天然同步。 */
+/* `overflow: hidden` 是必需的，不是为了裁剪内容，而是为了裁掉 `.np-bg`：
+   那层背景带 `transform: scale(1.2)`，在四边各溢出父容器的 10%。父容器的高度
+   到播放条上沿就结束了（inset 的 bottom 是 --pb-h），所以溢出的那 ~74px 正好
+   落在播放条上。`.np-bg` 在 `.nowplaying` 的层叠上下文里（z-index 60），比播放条
+   的 20 高，于是播放条上会蒙一层模糊背景 —— 播放条本身是不透明的
+   （background: var(--bg-1)），遮住它的只能是这层溢出。
+   注意：歌词/评论的滚动容器是内部的 `.lyric-scroll` / `#npComments`，它们各有
+   自己的 `overflow-y: auto`，父级裁剪不影响它们滚动。 */
+/* 顶部从 0 铺到底（m02003 第③点定下的整屏高度，m02599 第②点只是把盖在它上面
+   的东西撤掉）：播放页始终铺满整屏，标题栏不再整条浮在它之上（`.titlebar` 是
+   `z-index: auto`，底色被播放页盖住），只有右上角那 7 个按钮那一簇（`.tb-right`,
+   z-index 70）浮在播放页之上，始终可见可点。
+   为此播放页自己的内容要躲开顶上这条 52px：`.np-body` 的上内边距、`.np-close` 的
+   `top` 都按 --tb-h 让位，页面本身仍然是整屏高度。 */
+.nowplaying { position: fixed; inset: 0 0 var(--pb-h) 0; z-index: 60; display: flex; flex-direction: column; animation: npIn .3s var(--ease); -webkit-app-region: no-drag; overflow: hidden; }
+@keyframes npIn { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+/* 收起时向下渐隐：和 npIn 反向对称，播完由 app.js 的 animationend 摘掉 hidden */
+.nowplaying.np-out { animation: npOut .26s var(--ease) forwards; pointer-events: none; }
+@keyframes npOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(26px); } }
+.np-bg {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  filter: blur(64px) saturate(1.5) brightness(.5);
+  transform: scale(1.2);
+  /* scale(1.2) 让这层背景在四边各溢出 10% —— 底部正好多出约 74px，刚好盖住
+     播放条，而它自己的 z-index 来自父级 .nowplaying(60)，高于播放条的 20，
+     于是底栏整条点不动（elementFromPoint 命中的是 #npBg）。它纯粹是装饰，
+     必须让点击穿透。 */
+  pointer-events: none;
+}
+.np-scrim { position: absolute; inset: 0; background: rgba(14,14,17,.72); pointer-events: none; }
+/* `top` 回到 14px（m02599 第②点）：标题栏不再压在播放页上，收起圆钮不用再让出
+   52px 那条带，和右上角那 7 个按钮落在同一条水平线上。
+   它能点得动靠的是 `.nowplaying` 的 `no-drag`（见上面 925 行那段说明），
+   与标题栏的拖拽区无关：Electron 的拖拽区是「drag 矩形减去 no-drag 矩形」，
+   不看层叠顺序。 */
+.np-close { position: absolute; top: 14px; left: 20px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--text-1); background: rgba(255,255,255,.07); -webkit-app-region: no-drag; }
+.np-close:hover { background: rgba(255,255,255,.14); color: #fff; }
+
+/* The whole page is centred as one block: cover + lyrics sit in a fixed-width
+   stage in the middle of the window. Previously `.np-body` was a plain
+   space-between flex and `.np-right` stretched to the far edge, so the lyrics
+   hugged the left of an over-wide column with a dead gap on the right. */
+/* `align-items` must stay `stretch` (the default), NOT `center`: with `center`
+   the flex items take their content height instead of the container height, so
+   `.np-right` grew to the full length of the comment list (~3990px) and
+   `#npComments` ended up with clientHeight === scrollHeight — `overflow-y:auto`
+   had nothing to scroll, and the list was simply clipped by the viewport.
+   Vertical centring of the cover is done by `.np-left`'s own
+   `justify-content: center` instead, which works at any height. */
+/* 左右两栏各占一半：两边都用 `flex: 1 1 0`（basis 为 0），剩余空间严格均分，
+   不再让左栏固定 380px、右栏吃满剩下的宽度。 */
+.np-body {
+  position: relative; z-index: 2; flex: 1 1 auto;
+  /* 上内边距给顶栏那条带让位（m02003 第③点定下，m02599 第②点沿用）：页面从
+     y=0 铺起，右上角那一簇按钮仍然浮在这一带之上，46px 的原内边距会让封面顶端、
+     歌词页签钻到按钮底下去；--tb-h + 22px 让内容从那一带下面开始。 */
+  display: flex; gap: 48px; padding: calc(var(--tb-h) + 22px) 40px 34px; min-height: 0;
+  justify-content: center;
+  max-width: 1280px; width: 100%; margin: 0 auto;
+}
+.np-left { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+/* 左栏现在与右栏等宽（约 576px），封面跟着可用宽度放大，不再固定 330px。
+   用 min() 兜住窄窗口，避免封面把左栏撑出横向滚动。 */
+.np-cover-wrap { position: relative; width: min(420px, 100%); aspect-ratio: 1 / 1; }
+/* 圆角矩形，不再是黑胶圆盘：圆形靠 `border-radius: 50%` + 22 秒自转来营造
+   唱片感，改成圆角矩形后自转失去了意义（转一个方角矩形只会看出歪斜），
+   所以连同 `@keyframes spin` 和 `.spinning` 一起删掉。 */
+.np-cover {
+  /* display:block 必需：img 默认是 inline，行盒会带上基线以下的空隙，把
+     aspect-ratio 算出的 420px 撑成 423.5px。 */
+  display: block;
+  width: 100%; height: 100%; object-fit: cover;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.55);
+  background: var(--bg-3);
+}
+.np-cover-fallback { position: absolute; inset: 0; border-radius: 20px; background: var(--bg-3); z-index: -1; }
+
+.np-info { margin-top: 30px; text-align: center; max-width: 100%; }
+.np-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-sub { font-size: 12.5px; color: var(--text-2); display: flex; align-items: center; justify-content: center; gap: 6px; }
+.np-sub span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 歌手名与专辑名可点（用户 m07698 第④点）：给了手型和 hover 变色，
+   否则它们和旁边的分隔点长得一样，没人会想到能点。 */
+#npArtist, #npAlbum { cursor: pointer; transition: color 120ms ease; }
+#npArtist:hover, #npAlbum:hover { color: var(--accent); text-decoration: underline; }
+.np-dot { color: var(--text-3); flex: 0 0 auto; }
+
+/* 右栏与左栏等宽：`flex: 1 1 0` 与 .np-left 完全对称。原来这里的 max-width:760px
+   会让右栏比左栏宽，破坏各占一半的布局。 */
+.np-right { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+.np-tabs { display: flex; gap: 5px; margin-bottom: 12px; flex: 0 0 auto; }
+.np-tab { padding: 6px 14px; border-radius: 15px; font-size: 13px; color: var(--text-2); }
+.np-tab:hover { color: var(--text-0); background: rgba(255,255,255,.06); }
+.np-tab.active { background: rgba(255,255,255,.12); color: var(--text-0); font-weight: 500; }
+.np-tab span { color: var(--text-3); font-size: 11px; }
+.np-pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+.lyric-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding-right: 10px; mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent); -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent); }
+.lyric-list { padding: 42% 0; }
+/* Lyrics are centred inside their column. The active line grows from 17px to
+   22px, and with `transform-origin: left` it used to shove every line sideways
+   on each highlight change; growing from the centre keeps the block still. */
+.lyric-line {
+  font-size: 17px; line-height: 1.6; color: rgba(255,255,255,.42);
+  padding: 8px 0; cursor: pointer; text-align: center;
+  transition: color .24s var(--ease), font-size .24s var(--ease), transform .24s var(--ease);
+  transform-origin: center center;
+}
+.lyric-line:hover { color: rgba(255,255,255,.72); }
+/* 当前行：字号更大、颜色纯白并加一点发光，与未播放行拉开明显层次 */
+.lyric-line.active {
+  color: #fff; font-size: 22px; font-weight: 700;
+  text-shadow: 0 0 18px rgba(255,255,255,.35);
+}
+.lyric-trans { font-size: .82em; color: rgba(255,255,255,.45); margin-top: 3px; }
+.lyric-line.active .lyric-trans { color: rgba(255,255,255,.78); }
+.lyric-empty { color: var(--text-3); font-size: 13px; padding: 20px 0; }
+
+/* ============================ 评论 ============================ */
+.comments { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding-right: 8px; }
+.cm-summary { font-size: 13px; font-weight: 600; margin: 4px 0 12px; }
+.cm-summary em { font-style: normal; color: var(--text-3); font-weight: 400; }
+.cm-item { display: flex; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.cm-avatar { width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto; background: var(--bg-3); object-fit: cover; }
+.cm-body { flex: 1 1 auto; min-width: 0; }
+.cm-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.cm-user { font-size: 12.5px; color: #6ea8e8; }
+/* 昵称现在可以点进用户主页，得让鼠标和悬停把这件事说出来 */
+.cm-user[data-uid] { cursor: pointer; }
+.cm-user[data-uid]:hover { color: #9cc9f5; text-decoration: underline; }
+.cm-vip { font-size: 9px; color: #d4a24c; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; line-height: 12px; }
+.cm-time { font-size: 11px; color: var(--text-3); margin-left: auto; flex: 0 0 auto; }
+.cm-text { font-size: 13px; line-height: 1.62; color: var(--text-0); word-break: break-word; white-space: pre-wrap; }
+.cm-reply { margin-top: 7px; padding: 8px 11px; border-radius: 6px; background: rgba(255,255,255,.045); font-size: 12.5px; line-height: 1.55; }
+.cm-reply b { color: #6ea8e8; font-weight: 400; }
+.cm-foot { display: flex; align-items: center; gap: 14px; margin-top: 7px; }
+.cm-like { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-3); cursor: pointer; user-select: none; transition: color .15s, transform .12s; }
+.cm-like:hover { color: var(--text-1); }
+/* 点下去先缩一下，给出「收到了」的即时触感，不用等接口回来 */
+.cm-like:active { transform: scale(.9); }
+.cm-like.on { color: var(--accent); }
+/* 请求在飞的时候压暗，避免连点；但不要用 pointer-events:none，
+   那样点快了会直接吞掉后续点击，不如靠 busy 标志自己挡 */
+.cm-like.busy { opacity: .55; }
+.cm-like:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.cm-loadmore { width: 100%; padding: 11px; margin-top: 10px; border-radius: 6px; background: var(--bg-2); color: var(--text-2); font-size: 12.5px; }
+.cm-loadmore:hover { background: var(--bg-3); color: var(--text-0); }
+
+/* ============================ 弹窗 ============================ */
+.modal-mask {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(0,0,0,.62);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn .16s var(--ease);
+  backdrop-filter: blur(2px);
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  position: relative;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.6);
+  padding: 26px 28px;
+  animation: modalIn .22s var(--ease);
+  max-height: 88vh; overflow-y: auto;
+}
+@keyframes modalIn { from { opacity: 0; transform: scale(.96) translateY(10px); } to { opacity: 1; transform: none; } }
+.modal-x { position: absolute; top: 14px; right: 14px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--text-3); }
+.modal-x:hover { background: var(--bg-hover); color: var(--text-0); }
+.modal h2 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+
+/* 自绘输入弹窗（替代 Electron 里不可用的 window.prompt） */
+.ask-modal { width: 380px; }
+.ask-modal h2 { margin-bottom: 14px; }
+.ask-modal .text-input { width: 100%; }
+.ask-err { min-height: 16px; margin-top: 7px; font-size: 11.5px; color: var(--accent-hi); }
+.ask-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.ask-actions .btn-side,
+.ask-actions .btn-primary { min-width: 76px; padding: 8px 16px; }
+
+.login-modal { width: 400px; }
+.login-head { text-align: center; margin-bottom: 20px; }
+.login-head h2 { margin-bottom: 7px; }
+.login-head p { font-size: 12px; color: var(--text-3); line-height: 1.55; }
+.login-tabs { display: flex; gap: 4px; margin-bottom: 20px; background: var(--bg-1); padding: 3px; border-radius: 8px; }
+.login-tab { flex: 1 1 0; padding: 7px; border-radius: 6px; font-size: 12.5px; color: var(--text-2); transition: background .14s var(--ease), color .14s var(--ease); }
+.login-tab:hover { color: var(--text-0); }
+.login-tab.active { background: var(--bg-3); color: var(--text-0); font-weight: 500; }
+.login-pane { display: flex; flex-direction: column; gap: 11px; }
+
+.qr-wrap { position: relative; align-self: center; width: 200px; height: 200px; background: #fff; border-radius: 10px; padding: 10px; }
+.qr-wrap canvas { width: 180px; height: 180px; display: block; image-rendering: pixelated; }
+.qr-mask { position: absolute; inset: 0; background: rgba(255,255,255,.95); border-radius: 10px; display: grid; place-items: center; text-align: center; padding: 20px; }
+.qr-mask-inner { font-size: 12.5px; color: #333; line-height: 1.6; }
+.qr-mask-inner button { margin-top: 10px; padding: 6px 16px; border-radius: 15px; background: var(--accent); color: #fff; font-size: 12.5px; }
+.qr-tip { text-align: center; font-size: 12px; color: var(--text-2); }
+
+/* ---- 安全验证弹窗（关注被 -462 拦截时） ---- */
+/* 弹窗是 flex 列并居中：二维码是 200px 的白底方块，比标题窄，
+   `.modal` 本身不是 flex 容器，靠 `align-self: center` 是居不中的 */
+.verify-modal { width: 380px; display: flex; flex-direction: column; align-items: center; }
+.verify-modal h2 { margin-bottom: 8px; align-self: flex-start; }
+.verify-tip { font-size: 12.5px; color: var(--text-2); line-height: 1.65; margin-bottom: 18px; align-self: flex-start; }
+.verify-qr { align-self: center; }
+/* 二维码图片是网易云生成的 130x130 JPEG，放大到 180 会糊，故保持整数倍缩放 */
+.verify-qr img { width: 180px; height: 180px; display: block; image-rendering: pixelated; }
+/* 刷新二维码降级成二维码正下方的一行下划线文字，把按钮位置留给主操作 */
+.verify-refresh {
+  margin-top: 13px; font-size: 12.5px; color: var(--text-2);
+  text-decoration: underline; text-underline-offset: 3px;
+  transition: color .14s var(--ease);
+}
+.verify-refresh:hover { color: var(--accent-hi); }
+.verify-done-btn { margin-top: 20px; width: 100%; }
+
+.field-row { display: flex; gap: 8px; }
+.cc-select { width: 76px; flex: 0 0 auto; background: var(--bg-3); border: 1px solid var(--line-2); border-radius: var(--radius); padding: 0 7px; outline: none; cursor: pointer; font-size: 12.5px; }
+.cc-select option { background: var(--bg-3); }
+.text-input, .text-area {
+  flex: 1 1 auto; min-width: 0;
+  height: 38px; padding: 0 12px;
+  background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--radius);
+  outline: none; font-size: 13px;
+  transition: border-color .14s var(--ease), background .14s var(--ease);
+  user-select: text;
+}
+.text-area { height: auto; padding: 10px 12px; resize: vertical; line-height: 1.55; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
+.text-input:focus, .text-area:focus { border-color: var(--accent); background: var(--bg-2); }
+.text-input::placeholder, .text-area::placeholder { color: var(--text-3); }
+
+.btn-primary {
+  height: 38px; border-radius: var(--radius);
+  background: var(--accent); color: #fff; font-size: 13.5px; font-weight: 500;
+  transition: background .14s var(--ease), transform .1s var(--ease);
+}
+.btn-primary:hover { background: var(--accent-hi); }
+.btn-primary:active { transform: scale(.985); }
+.btn-primary[disabled] { opacity: .5; pointer-events: none; }
+.btn-side {
+  flex: 0 0 auto; height: 38px; padding: 0 14px;
+  border-radius: var(--radius); background: var(--bg-3); color: var(--text-1); font-size: 12.5px;
+  transition: background .14s var(--ease), color .14s var(--ease);
+}
+.btn-side:hover { background: var(--bg-4); color: var(--text-0); }
+.btn-side[disabled] { opacity: .5; pointer-events: none; }
+.btn-ghost { align-self: center; padding: 6px 15px; border-radius: 15px; border: 1px solid var(--line-2); color: var(--text-2); font-size: 12px; }
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text-0); }
+.login-err { font-size: 12px; color: var(--accent-hi); min-height: 16px; line-height: 1.5; }
+.hint { font-size: 11.5px; color: var(--text-3); line-height: 1.65; }
+.hint code { background: var(--bg-1); padding: 1px 5px; border-radius: 3px; color: var(--text-1); font-size: 11px; }
+
+.add-modal { width: 420px; }
+.add-list { margin: 16px 0 12px; max-height: 320px; overflow-y: auto; }
+.add-item { display: flex; align-items: center; gap: 11px; padding: 8px 9px; border-radius: var(--radius); cursor: pointer; }
+.add-item:hover { background: var(--bg-hover); }
+.add-item img { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; flex: 0 0 auto; background: var(--bg-3); }
+.add-item .ai-meta { flex: 1 1 auto; min-width: 0; }
+.add-item .ai-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.add-item .ai-count { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.add-item .ai-check { width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid var(--text-3); flex: 0 0 auto; display: grid; place-items: center; }
+.add-item.added .ai-check { background: var(--accent); border-color: var(--accent); }
+.add-item.added .ai-check::after { content: ''; width: 8px; height: 4px; border-left: 1.8px solid #fff; border-bottom: 1.8px solid #fff; transform: rotate(-45deg) translateY(-1px); }
+.add-new { display: flex; gap: 8px; padding-top: 13px; border-top: 1px solid var(--line); }
+
+/* 多歌手选择弹窗（m03577 第⑩点）：行样式直接复用 .add-item，这里只补容器宽度。 */
+.artist-modal { width: 420px; }
+.am-list { margin: 14px 0 2px; max-height: 320px; overflow-y: auto; }
+
+/* ============================ 扫描进度（m00001 第②点） ============================ */
+/* 盖在整页上的轻遮罩：既挡住误触，又保留背景可见 —— 扫描时用户大多只是等，
+   不需要一块不透明的黑屏。 */
+.scan-mask {
+  position: fixed; inset: 0; z-index: 120;
+  background: rgba(0,0,0,.42);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn .16s var(--ease);
+  backdrop-filter: blur(1.5px);
+}
+.scan-card {
+  width: 420px; padding: 22px 24px 20px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 70px rgba(0,0,0,.55);
+  animation: modalIn .2s var(--ease);
+}
+.scan-title { font-size: 14.5px; font-weight: 600; color: var(--text-0); margin-bottom: 14px; }
+/* 进度条：底槽用 --bg-4，填充用强调色。高度 6px —— 再细在 4K 屏上看不见，
+   再粗就把这张小卡片撑得头重脚轻。 */
+.scan-bar {
+  height: 6px; border-radius: 3px; background: var(--bg-4);
+  overflow: hidden;
+}
+.scan-bar i {
+  display: block; height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hi));
+  border-radius: inherit;
+  transition: width .18s linear;
+}
+/* 当前文件名：单行、省略号。它可能很长（`歌手 - 歌名 (Live).flac`），
+   换行会把卡片高度顶得跳来跳去。 */
+.scan-file {
+  margin-top: 11px;
+  font-size: 12px; line-height: 1.5; color: var(--text-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-height: 18px;
+}
+.scan-count { margin-top: 4px; font-size: 11.5px; color: var(--text-3); min-height: 16px; }
+
+/* ============================ 右键菜单 ============================ */
+.ctx-menu {
+  position: fixed; z-index: 90; min-width: 172px;
+  background: var(--bg-3); border: 1px solid var(--line-2); border-radius: var(--radius);
+  box-shadow: 0 10px 34px rgba(0,0,0,.5);
+  padding: 5px; animation: fadeIn .12s var(--ease);
+}
+.ctx-item { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border-radius: 5px; font-size: 12.5px; color: var(--text-1); cursor: default; }
+.ctx-item:hover { background: var(--bg-hover); color: var(--text-0); }
+.ctx-item svg { color: var(--text-3); flex: 0 0 auto; }
+.ctx-item:hover svg { color: var(--text-1); }
+.ctx-sep { height: 1px; background: var(--line); margin: 4px 6px; }
+
+/* ============================ Toast ============================ */
+.toast-wrap { position: fixed; top: 66px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+.toast {
+  padding: 9px 17px; border-radius: 18px;
+  background: var(--bg-4); color: var(--text-0);
+  font-size: 12.5px; box-shadow: 0 6px 22px rgba(0,0,0,.45);
+  border: 1px solid var(--line-2);
+  animation: toastIn .22s var(--ease);
+  max-width: 460px; text-align: center; line-height: 1.5;
+}
+.toast.err { background: #4a2020; border-color: #6b2c2c; color: #ffd9d9; }
+.toast.ok { background: #1e3d2a; border-color: #2c5c3f; color: #d4f5e0; }
+.toast.out { animation: toastOut .2s var(--ease) forwards; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-10px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes toastOut { to { opacity: 0; transform: translateY(-8px) scale(.97); } }
+
+/* ============================ 工具类 ============================ */
+[hidden] { display: none !important; }
+.link { color: #6ea8e8; cursor: pointer; }
+.link:hover { text-decoration: underline; }

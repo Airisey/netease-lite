@@ -1,0 +1,940 @@
+/* ============================================================
+   网易云音乐 Lite — 悬浮小窗（v 竖版 / h 横版）
+   ------------------------------------------------------------
+   这个文件只被 renderer/mini.html 引用。窗口是 frameless + transparent 的，
+   所以 html/body 必须全透明，可见的 UI 只有一张填满窗口的圆角卡片。
+
+   主题：所有颜色都走 styles.css 的 :root 变量（--accent / --bg-* / --text-* /
+   --line* / --radius* / --shadow / --ease），小窗自己额外需要的颜色统一在下面
+   的 --mini-* 里声明，深色默认值写在这里。换肤时 html[data-skin="light"]
+   只要覆盖变量，不需要改任何布局规则。
+
+   注意：小窗不引用 skins.css（它由另一个文件/作者维护，避免两套值互相漂移），
+   所以本文件自带一份 light 变量覆盖，值与 skins.css 的「现代白」一致。
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   0. 变量层
+   ------------------------------------------------------------ */
+:root {
+  --mini-radius: 14px;         /* 卡片圆角；窗口本身没有阴影，靠描边收边 */
+  --mini-cover-radius: 11px;   /* 封面圆角 */
+  --mini-btn: 32px;
+  --mini-play: 38px;
+  --mini-bar-h: 4px;           /* 竖版进度条粗细 */
+  --mini-line-h: 3px;          /* 横版底部进度线粗细 */
+
+  --mini-card-bg: var(--bg-1);
+  --mini-card-ring: var(--line-2);
+  --mini-track: rgba(255, 255, 255, 0.14);
+
+  /* 歌词：经典黑用白色不同透明度做层次，现代白必须整体反转成黑色 */
+  --mini-lyric: rgba(255, 255, 255, 0.42);
+  --mini-lyric-hover: rgba(255, 255, 255, 0.72);
+  --mini-lyric-on: #ffffff;
+  --mini-lyric-on-glow: 0 0 14px rgba(255, 255, 255, 0.32);
+  --mini-lyric-trans: rgba(255, 255, 255, 0.45);
+  --mini-lyric-trans-on: rgba(255, 255, 255, 0.78);
+}
+
+/* 现代白：与 skins.css 的 html[data-skin="light"] 保持一致。
+   本文件在小窗里是最后加载的，同特异性下会覆盖 skins.css —— 这正是我们要的：
+   小窗不依赖 skins.css，即使它不存在，白皮也是完整的。 */
+html[data-skin="light"] {
+  /* 与 skins.css 的 html[data-skin="light"] 逐值对齐：白皮在整机只有一个强调色
+     （蓝 #2b63f0），小窗如果自己用品牌红，同一个界面会出现两种强调色。 */
+  --accent: #2b63f0;
+  --accent-soft: rgba(43, 99, 240, 0.1);
+  --accent-hi: #1d5bd6;
+
+  --bg-0: #ffffff;
+  --bg-1: #f7f8fa;
+  --bg-2: #ffffff;
+  --bg-3: #f1f2f4;
+  --bg-4: #eef0f3;
+  --bg-hover: rgba(17, 17, 17, 0.045);
+  --bg-active: rgba(17, 17, 17, 0.075);
+
+  --text-0: #111114;
+  --text-1: #4a4d55;
+  --text-2: #5c5f67;
+  --text-3: #696d76;
+
+  --line: rgba(17, 17, 17, 0.08);
+  --line-2: rgba(17, 17, 17, 0.15);
+
+  --shadow: 0 6px 20px rgba(17, 17, 17, 0.07);
+
+  --mini-track: rgba(17, 17, 17, 0.12);
+  /* 未唱到的歌词是「小窗里最需要能读、又不能抢戏」的那一层：0.42 压在白底上
+     只有 2.8:1，太浅；提到 0.55 约 4.2:1，仍是灰的但读得清。 */
+  --mini-lyric: rgba(17, 17, 17, 0.55);
+  --mini-lyric-hover: rgba(17, 17, 17, 0.78);
+  --mini-lyric-on: #111114;
+  --mini-lyric-on-glow: none;      /* 白底上发光等于发糊，改用纯黑 + 字重区分 */
+  --mini-lyric-trans: rgba(17, 17, 17, 0.58);
+  --mini-lyric-trans-on: rgba(17, 17, 17, 0.78);
+}
+
+/* ------------------------------------------------------------
+   1. 透明底 + 卡片
+   ------------------------------------------------------------ */
+/* styles.css 把 html/body 刷成 --bg-0，透明窗口里必须先擦掉；
+   它还给 body 设了 flex column，小窗自己接管布局。 */
+html, body {
+  background: transparent;
+  display: block;
+  overflow: hidden;
+}
+
+/* `[hidden]` 在 UA 样式表里只是 `display:none`，特异性最低：
+   styles.css 的 `svg { display:block }` 和本文件的 `.mini-queue { display:flex }`
+   都会把它盖掉，所以这里必须带 !important（styles.css 里也有一条同样的兜底，
+   这里再写一次是为了让 mini.css 单独加载时也成立）。 */
+.mini-card [hidden] { display: none !important; }
+
+.mini-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;                     /* 圆角必须靠裁切才生效 */
+  border-radius: var(--mini-radius);
+  background: var(--mini-card-bg);
+  box-shadow: inset 0 0 0 1px var(--mini-card-ring);
+  color: var(--text-0);
+  animation: miniCardIn 0.18s var(--ease) both;
+}
+
+@keyframes miniCardIn {
+  from { opacity: 0; transform: scale(0.975); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mini-card { animation: none; }
+}
+
+/* 通用：单行省略 */
+.mini-title,
+.mini-artist,
+.mini-album,
+.mini-queue-name,
+.mini-queue-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-muted { color: var(--text-3); }
+
+/* 歌手 / 专辑链接 */
+.mini-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s var(--ease);
+}
+.mini-link:hover { color: var(--accent-hi); }
+
+.mini-album {
+  display: block;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.15s var(--ease);
+}
+.mini-album:hover { color: var(--text-1); }
+.mini-album.off { cursor: default; }
+.mini-album.off:hover { color: var(--text-3); }
+.mini-album:empty { display: none; }
+
+/* 拖拽区：不用 -webkit-app-region，位移由主进程轮询系统光标完成 */
+.mini-drag { cursor: default; }
+
+/* ------------------------------------------------------------
+   2. 头部（拖拽区）
+   ------------------------------------------------------------ */
+.mini-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 12px 10px;
+}
+
+.mini-cover {
+  position: relative;
+  flex: 0 0 auto;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--mini-cover-radius);
+  overflow: hidden;
+  background: var(--bg-3);
+}
+.mini-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+/* 没有封面（未在播放 / 图片挂了）时露出的占位 */
+.mini-cover-fallback {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  color: var(--text-3);
+}
+.mini-cover img:not([src]) + .mini-cover-fallback { display: grid; }
+
+.mini-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 22px;      /* 给右上角的关闭按钮让位 */
+}
+
+.mini-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-0);
+}
+.mini-artist {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text-2);
+}
+.mini-album {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+/* 关闭按钮：两种形态都贴在卡片右上角，安静、不抢焦点 */
+.mini-close {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 6;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-3);
+  opacity: 0.75;
+  transition: color 0.15s var(--ease), background 0.15s var(--ease), opacity 0.15s var(--ease);
+}
+.mini-close:hover {
+  color: var(--text-0);
+  background: var(--bg-hover);
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------
+   3. 歌词区（仅竖版）
+   ------------------------------------------------------------ */
+.mini-lyric {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;              /* 让滚动容器按 flex 撑满，而不是靠 height:100% */
+  flex-direction: column;
+  padding: 0 14px 4px;
+}
+
+.mini-lyric-scroll {
+  flex: 1 1 auto;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent);
+}
+.mini-lyric-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+/* 第 14 点：拖动时把渐隐遮罩和发光阴影关掉。
+   透明窗口每次 setPosition 都要重新合成整个表面，mask 会强制离屏合成，
+   发光阴影要重算模糊，这两笔在拖动期间纯属浪费，且正好卡在跟手的关键路径上。
+   松手（.is-dragging 移除）后立刻恢复，用户看不到差别。 */
+body.is-dragging .mini-lyric-scroll {
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+body.is-dragging .lyric-line.active {
+  text-shadow: none;
+}
+
+/* 第 15 点：移出 / 移入滑动期间同理。
+   滑动由主进程逐帧 setPosition 驱动（electron/main.js 的 slideMini），窗口每移一帧
+   渲染进程都要重新合成整个透明表面，mask 的离屏合成和发光模糊的重新计算正好压在
+   这条路径上 —— 这就是原来滑动发顿的来源之一。滑动期间摘掉，滑完立刻恢复。 */
+body.is-sliding .mini-lyric-scroll {
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+body.is-sliding .lyric-line.active {
+  text-shadow: none;
+}
+
+/* 上下留白让第一行 / 最后一行也能滚到正中 */
+.mini-lyric-list { padding: 42% 0; }
+
+/* 复用 Lrc.LyricView 生成的 .lyric-line / .lyric-trans，只把尺寸压到小窗尺度 */
+.mini-lyric .lyric-line {
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 7px 0;
+  color: var(--mini-lyric);
+}
+.mini-lyric .lyric-line:hover { color: var(--mini-lyric-hover); }
+.mini-lyric .lyric-line.active {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--mini-lyric-on);
+  text-shadow: var(--mini-lyric-on-glow);
+}
+.mini-lyric .lyric-trans {
+  font-size: 0.84em;
+  margin-top: 2px;
+  color: var(--mini-lyric-trans);
+}
+.mini-lyric .lyric-line.active .lyric-trans { color: var(--mini-lyric-trans-on); }
+.mini-lyric .lyric-empty {
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.mini-lyric-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+/* ------------------------------------------------------------
+   4. 进度 + 按钮
+   ------------------------------------------------------------ */
+.mini-bottom {
+  flex: 0 0 auto;
+  padding: 4px 12px 10px;
+}
+
+.mini-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.mini-time {
+  flex: 0 0 auto;
+  width: 30px;
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* 命中区比可视条高，4px 的条也好点中；可视部分交给子元素 */
+.mini-progress {
+  position: relative;
+  flex: 1 1 auto;
+  height: 14px;
+  cursor: pointer;
+  touch-action: none;
+}
+.mini-progress-bg,
+.mini-progress-fill {
+  position: absolute;
+  top: 50%;
+  height: var(--mini-bar-h);
+  border-radius: calc(var(--mini-bar-h) / 2);
+  transform: translateY(-50%);
+}
+.mini-progress-bg {
+  left: 0;
+  right: 0;
+  background: var(--mini-track);
+}
+.mini-progress-fill {
+  left: 0;
+  width: 0;
+  background: var(--accent);
+  /* 进度每秒更新好几次，这里绝对不能加 transition，否则条会一直追不上 */
+}
+.mini-progress-knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+}
+.mini-progress:hover .mini-progress-knob,
+.mini-progress.dragging .mini-progress-knob { opacity: 1; }
+
+.mini-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+}
+
+.mini-btn {
+  display: grid;
+  place-items: center;
+  width: var(--mini-btn);
+  height: var(--mini-btn);
+  border-radius: 50%;
+  color: var(--text-1);
+  transition: color 0.15s var(--ease), background 0.15s var(--ease), transform 0.12s var(--ease);
+}
+.mini-btn:hover {
+  color: var(--text-0);
+  background: var(--bg-hover);
+}
+.mini-btn:active { transform: scale(0.92); }
+.mini-btn.active { color: var(--accent); }
+
+.mini-play {
+  width: var(--mini-play);
+  height: var(--mini-play);
+  color: var(--text-0);
+  background: var(--bg-3);
+}
+.mini-play:hover { background: var(--bg-4); }
+
+.mini-like.on { color: var(--accent); }
+
+/* 没有曲目时：整排压暗，点了也不会有副作用 */
+.mini-controls.is-off .mini-btn {
+  opacity: 0.45;
+  color: var(--text-3);
+}
+
+/* ------------------------------------------------------------
+   5. 队列浮层（仅竖版）
+   ------------------------------------------------------------ */
+.mini-queue {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--mini-radius);
+  background: var(--bg-2);
+  animation: miniQueueIn 0.16s var(--ease) both;
+}
+
+@keyframes miniQueueIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 第 16 点：关闭时也往下渐隐，和入场对称。
+   原来关闭只是一句 hidden=true，浮层直接"啪"地消失。这里补一段出场动画：
+   向下滑走 + 淡出（.is-closing 由 mini.js 的 setQueueOpen 挂上，动画跑完才挂 hidden，
+   否则 .mini-card [hidden]{display:none!important} 会把动画直接掐掉）。 */
+.mini-queue.is-closing {
+  animation: miniQueueOut 0.2s var(--ease) both;
+  pointer-events: none;
+}
+
+@keyframes miniQueueOut {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(14px); }
+}
+
+.mini-queue-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 9px 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--line);
+}
+.mini-queue-head em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+.mini-queue-x {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-3);
+  transition: color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.mini-queue-x:hover { color: var(--text-0); background: var(--bg-hover); }
+
+.mini-queue-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 5px 6px 8px;
+}
+
+.mini-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 7px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.13s var(--ease);
+}
+.mini-queue-item:hover { background: var(--bg-hover); }
+.mini-queue-item.on { background: var(--accent-soft); }
+.mini-queue-item.on .mini-queue-name { color: var(--accent-hi); }
+
+.mini-queue-cover {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-3);
+}
+.mini-queue-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+
+.mini-queue-meta { flex: 1 1 auto; min-width: 0; }
+.mini-queue-name { font-size: 12px; color: var(--text-0); }
+.mini-queue-artist { margin-top: 1px; font-size: 11px; color: var(--text-3); }
+
+.mini-queue-empty {
+  padding: 28px 0;
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+/* ============================================================
+   6. 横版（420 x 96）：一行 —— 封面 + 标题 | 五个按钮
+      底部贴一条 3px 的可拖进度线
+   ============================================================ */
+body[data-mode="h"] .mini-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px var(--mini-line-h) 10px;
+}
+
+body[data-mode="h"] .mini-head {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+}
+
+body[data-mode="h"] .mini-cover {
+  width: 62px;
+  height: 62px;
+}
+
+body[data-mode="h"] .mini-meta { padding-right: 0; }
+body[data-mode="h"] .mini-title { font-size: 13.5px; }
+body[data-mode="h"] .mini-artist { font-size: 11.5px; margin-top: 2px; }
+body[data-mode="h"] .mini-album { display: none; }
+
+body[data-mode="h"] .mini-close { top: 4px; right: 6px; }
+
+/* 横版没有歌词、没有队列浮层、没有队列按钮 */
+body[data-mode="h"] .mini-lyric { display: none; }
+body[data-mode="h"] .mini-queue { display: none; }
+body[data-mode="h"] #miniQueueBtn { display: none; }
+
+/* 让 .mini-progress-row / .mini-controls 直接参与卡片的横向 flex，
+   这样进度行可以脱离文档流去贴底，按钮则排到封面右侧 */
+body[data-mode="h"] .mini-bottom { display: contents; }
+
+body[data-mode="h"] .mini-controls {
+  flex: 0 0 auto;
+  gap: 0;
+  justify-content: flex-end;
+}
+body[data-mode="h"] .mini-btn { width: 30px; height: 30px; }
+body[data-mode="h"] .mini-play { width: 34px; height: 34px; }
+
+/* 贴底进度线：3px，整条可拖；时间标签藏掉 */
+body[data-mode="h"] .mini-progress-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  height: var(--mini-line-h);
+  margin: 0;
+  gap: 0;
+}
+body[data-mode="h"] .mini-progress-row .mini-time { display: none; }
+
+body[data-mode="h"] .mini-progress {
+  flex: 1 1 auto;
+  height: var(--mini-line-h);
+  border-radius: 0;
+}
+body[data-mode="h"] .mini-progress-bg,
+body[data-mode="h"] .mini-progress-fill {
+  top: 0;
+  height: var(--mini-line-h);
+  border-radius: 0;
+  transform: none;
+}
+body[data-mode="h"] .mini-progress-knob { display: none; }
+
+/* ============================================================
+   7. 新增皮肤：瑞士风
+   ------------------------------------------------------------
+   这一节必须写在这里，不能写进 skins.css —— mini.html 只引
+   styles.css + mini.css（见文件头 12 行），skins.css 里那一节小窗规则
+   目前是不生效的兜底。所以每加一款皮肤，变量块都要在本文件里再抄一份，
+   值与 skins.css 的同名皮肤**逐值对齐**：同一个 id 在主窗口和小窗里
+   必须是同一套颜色，否则两个窗口并排看会像两款不同的皮肤。
+
+   下面只覆盖变量 + 小窗自己那几处硬编码的圆角/装饰，不重复 skins.css
+   里已经写过的通用规则（小窗根本没有那些元素）。
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   7.1 瑞士风
+   ------------------------------------------------------------ */
+html[data-skin="swiss"] {
+  --accent: #d63412;
+  --accent-soft: rgba(214, 52, 18, 0.1);
+  --accent-hi: #b02809;
+
+  --bg-0: #f5f2eb;
+  --bg-1: #efece4;
+  --bg-2: #fbf9f4;
+  --bg-3: #e9e4d8;
+  --bg-4: #ded8c9;
+  --bg-hover: rgba(17, 17, 17, 0.05);
+  --bg-active: rgba(17, 17, 17, 0.09);
+
+  --text-0: #111111;
+  --text-1: #3c3c3c;
+  --text-2: #555555;
+  --text-3: #5f5f5f;
+
+  --line: rgba(17, 17, 17, 0.1);
+  --line-2: rgba(17, 17, 17, 0.22);
+
+  --shadow: 0 4px 14px rgba(17, 17, 17, 0.08);
+
+  --mini-card-bg: var(--bg-2);
+  --mini-card-ring: var(--line-2);
+  --mini-track: rgba(17, 17, 17, 0.14);
+
+  --mini-lyric: rgba(17, 17, 17, 0.62);
+  --mini-lyric-hover: rgba(17, 17, 17, 0.76);
+  --mini-lyric-on: #111111;
+  --mini-lyric-on-glow: none;
+  --mini-lyric-trans: rgba(17, 17, 17, 0.62);
+  --mini-lyric-trans-on: rgba(17, 17, 17, 0.78);
+}
+
+html[data-skin="swiss"] {
+  --mini-radius: 2px;
+  --mini-cover-radius: 0;
+}
+html[data-skin="swiss"] .mini-btn,
+html[data-skin="swiss"] .mini-close,
+html[data-skin="swiss"] .mini-queue-x,
+html[data-skin="swiss"] .mini-progress-knob,
+html[data-skin="swiss"] .mini-queue-cover,
+html[data-skin="swiss"] .mini-queue-item,
+html[data-skin="swiss"] .mini-album {
+  border-radius: 0;
+}
+html[data-skin="swiss"] .mini-progress,
+html[data-skin="swiss"] .mini-progress-bg,
+html[data-skin="swiss"] .mini-progress-fill {
+  border-radius: 0;
+}
+
+/* 卡片顶边一根红线：与主窗口「选中就是一条红线」的语言一致。
+   粗细跟主窗口的 .titlebar 对齐（瑞士风 2px），不然大小窗并排看会一粗一细。 */
+html[data-skin="swiss"] .mini-card {
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-position: left top;
+  background-size: 100% 2px;
+}
+/* 播放键：平涂红方 */
+html[data-skin="swiss"] .mini-play {
+  background: var(--accent);
+  color: #ffffff;
+}
+html[data-skin="swiss"] .mini-play:hover { background: var(--accent-hi); }
+/* 队列选中行：左侧红杠 */
+html[data-skin="swiss"] .mini-queue-item.on {
+  background: none;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* ---- 小窗不做悬停下划线动效 ----
+   这条动效只在主窗口生效（skins.css 3.2 节）。小窗里刻意不做，原因有三：
+   1. 小窗是贴着屏幕边缘的浮层，鼠标常常只是「路过」它去点别的东西，
+      下划线会在这种无意义的划过里频繁闪动；
+   2. 这一排按钮是圆形的，线是直的，两者在底边对不上。算过：.mini-btn 直径
+      32px，线放在 bottom:1px 时该高度圆的弦只有 11.1px，而线按 left/right:7px
+      排出来是 18px —— 每侧多出约 3.5px，线头戳到圆外面；.mini-play 更明显
+      （38px 圆在该高度的弦 12.2px，线 24px，每侧多出约 5.9px）。
+      要藏住就得把线压到 bottom:3px，但那已经贴到图标下面了，不是「按钮下方
+      出现一道下划线」的样子；
+   3. 专辑名 + 队列行本来就是文字，鼠标悬停时靠颜色变化（--text-1 /
+      --accent-hi）已经能看出可点，加线是重复标记。
+   所以这里不留任何 ::after 规则，也不给这些元素加 position: relative ——
+   它们内部没有绝对定位后代（.mini-btn 里只有 svg），当年的 relative 只是
+   为了给下划线当锚点，去掉不影响任何布局。 */
+
+/* ------------------------------------------------------------
+   7.2 落日余晖
+   ------------------------------------------------------------ */
+html[data-skin="sunset"] {
+  --accent: #bd5730;
+  --accent-soft: rgba(189, 87, 48, 0.20);
+  --accent-hi: #ef8a5c;
+
+  --bg-0: #121010;
+  --bg-1: #1b1715;
+  --bg-2: #241e1a;
+  --bg-3: #2e2620;
+  --bg-4: #3a2f26;
+  --bg-hover: rgba(255, 255, 255, 0.055);
+  --bg-active: rgba(255, 255, 255, 0.095);
+
+  --text-0: #f2e9df;
+  --text-1: #c9b9a9;
+  --text-2: #ab9b83;
+  --text-3: #968a7b;
+
+  --line: rgba(242, 233, 223, 0.08);
+  --line-2: rgba(242, 233, 223, 0.15);
+
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+
+  /* 小窗是浮在任意桌面上的独立窗口，用暖褐黑当卡面 */
+  --mini-card-bg: var(--bg-1);
+  --mini-card-ring: var(--line-2);
+  --mini-track: rgba(242, 233, 223, 0.16);
+
+  /* 歌词：深底上用暖白分级；0.55 压 #1b1715 约 5.9:1，够读 */
+  --mini-lyric: rgba(242, 233, 223, 0.55);
+  --mini-lyric-hover: rgba(242, 233, 223, 0.78);
+  --mini-lyric-on: #f2e9df;
+  --mini-lyric-on-glow: 0 0 14px rgba(239, 138, 92, 0.42);
+  --mini-lyric-trans: rgba(242, 233, 223, 0.58);
+  --mini-lyric-trans-on: rgba(242, 233, 223, 0.80);
+}
+
+/* 卡片顶边一条 3px 地平线光带：小窗没有标题栏，这条带子就是它的「身份」。
+   粗细与色停靠点跟主窗口的 .titlebar 对齐，大小窗并排看才是同一款皮肤。 */
+html[data-skin="sunset"] .mini-card {
+  background-image: linear-gradient(90deg, #a8431f 0%, #ef8a5c 45%, #d4784a 75%, #8a4a35 100%);
+  background-repeat: no-repeat;
+  background-position: left top;
+  background-size: 100% 3px;
+}
+/* 播放键：暖橙实心圆（主窗口 .pb-play 的同款语言） */
+html[data-skin="sunset"] .mini-play {
+  background: var(--accent);
+  color: #ffffff;
+}
+html[data-skin="sunset"] .mini-play:hover {
+  background: var(--accent-hi);
+  color: #1a1512;
+}
+/* 队列选中行：左侧一道橙杠 + 一层橙雾，与主窗口 .qp-item.playing 一致 */
+html[data-skin="sunset"] .mini-queue-item.on {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent-hi);
+}
+html[data-skin="sunset"] .mini-queue-item.on .mini-queue-name {
+  color: var(--accent-hi);
+}
+
+/* 用户要的「偏黑色调」在小窗里就是：卡片底 --bg-1 的暖褐黑。
+   这里只补两处深底上会「消失」的图形元素。 */
+html[data-skin="sunset"] .mini-cover {
+  background: var(--bg-3);
+}
+html[data-skin="sunset"] .mini-progress-bg {
+  background: var(--mini-track);
+}
+
+/* ------------------------------------------------------------
+   7.3 街机风
+
+   这一节必须写在这里而不是 skins.css：mini.html 只引 styles.css +
+   mini.css，不引 skins.css。变量块与 skins.css「五、街机风」逐值对齐，
+   否则大小窗并排看会像两款不同的皮肤。
+
+   造型语言（和主窗口一致）：2px 墨黑描边 + 无模糊的硬投影 + 全部直角。
+   ------------------------------------------------------------ */
+html[data-skin="arcade"] {
+  --accent: #f6d467;
+  --accent-soft: rgba(246, 212, 103, 0.42);
+  /* 和主窗口一样是墨黑而不是「深一档的黄」：mini.css 把 --accent-hi 用在
+     .mini-queue-item.on .mini-queue-name 这类「当文字用」的地方，黄字在
+     黄底上根本读不出来，墨黑在这两种用法下都成立。 */
+  --accent-hi: #111111;
+
+  --bg-0: #f7f8f3;
+  --bg-1: #ffffff;
+  --bg-2: #ffffff;
+  --bg-3: #e6e7de;
+  --bg-4: #dadcd0;
+  --bg-hover: rgba(17, 17, 17, 0.06);
+  --bg-active: rgba(17, 17, 17, 0.1);
+
+  --text-0: #111111;
+  --text-1: #2b2b2b;
+  --text-2: #444444;
+  --text-3: #565656;
+
+  --line: rgba(17, 17, 17, 0.14);
+  --line-2: rgba(17, 17, 17, 0.28);
+
+  --shadow: 4px 4px 0 #111111;
+
+  /* 小窗浮在任意桌面之上，用纯白卡面 + 墨黑边框，和参考图里的白卡片一致 */
+  --mini-card-bg: var(--bg-1);
+  --mini-card-ring: var(--ink);
+  --mini-track: rgba(17, 17, 17, 0.16);
+
+  /* 歌词：白底上用墨黑分级；0.62 压 #ffffff 约 5.7:1，够 AA */
+  --mini-lyric: rgba(17, 17, 17, 0.62);
+  --mini-lyric-hover: rgba(17, 17, 17, 0.78);
+  --mini-lyric-on: #111111;
+  --mini-lyric-on-glow: none;
+  --mini-lyric-trans: rgba(17, 17, 17, 0.62);
+  --mini-lyric-trans-on: rgba(17, 17, 17, 0.80);
+
+  /* 与主窗口同名的墨黑常量。mini.css 自己的变量层里没有 --ink，
+     主窗口那份定义在 skins.css，这里补一份，值必须一致。 */
+  --ink: #111111;
+}
+
+/* 圆角归零。小窗的元素少，逐条列比用 * 通配更清楚，也不会误伤
+   横版那条贴底进度线的 border-radius:0 覆盖关系。 */
+html[data-skin="arcade"] {
+  --mini-radius: 0px;
+  --mini-cover-radius: 0px;
+}
+html[data-skin="arcade"] :is(
+  .mini-btn, .mini-close, .mini-queue-x, .mini-progress-knob,
+  .mini-queue-cover, .mini-queue-item, .mini-progress-bg, .mini-progress-fill
+) {
+  border-radius: 0;
+}
+
+/* 卡片四周的墨黑边框用 inset 环而不是 border：.mini-card 是 width/height:100%
+   的定尺盒子，补 2px border 会把里面所有内容整体缩小 4px。 */
+html[data-skin="arcade"] .mini-card {
+  box-shadow: inset 0 0 0 2px var(--ink);
+  /* 顶边再压一条 5px 墨黑带（环占掉上面 2px，露出 3px），
+     粗细与主窗口 .titlebar 底边那条对齐。 */
+  background-image: linear-gradient(var(--ink), var(--ink));
+  background-repeat: no-repeat;
+  background-position: left top;
+  background-size: 100% 5px;
+}
+
+/* 封面、按钮：方形 + 墨黑描边。因为全局是 box-sizing:border-box，
+   补边框不会改变 32/38px 的外框尺寸，那一排按钮的间距不受影响。 */
+html[data-skin="arcade"] :is(.mini-cover, .mini-btn, .mini-close, .mini-queue-x) {
+  border: 2px solid var(--ink);
+}
+html[data-skin="arcade"] :is(.mini-cover, .mini-btn) {
+  box-shadow: 2px 2px 0 var(--ink);
+}
+html[data-skin="arcade"] .mini-btn:hover {
+  background: var(--accent);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .mini-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+/* 播放键：黄底墨黑图标 + 更厚一档的硬投影，是这一排里的主按钮 */
+html[data-skin="arcade"] .mini-play {
+  background: var(--accent);
+  color: var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+html[data-skin="arcade"] .mini-play:hover {
+  background: var(--accent);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .mini-play:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+html[data-skin="arcade"] .mini-like.on {
+  background: var(--accent);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .mini-btn.active {
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+
+/* 进度条：底槽墨黑细线、填充黄、旋钮黄底墨边 */
+html[data-skin="arcade"] .mini-progress-fill {
+  background: var(--accent);
+}
+html[data-skin="arcade"] .mini-progress-knob {
+  background: var(--accent);
+  border: 2px solid var(--ink);
+}
+
+/* 队列浮层：白底 + 墨黑环；选中行黄底 + 左侧墨杠 */
+html[data-skin="arcade"] .mini-queue {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+html[data-skin="arcade"] .mini-queue-head {
+  border-bottom: 2px solid var(--ink);
+}
+html[data-skin="arcade"] .mini-queue-item.on {
+  background: var(--accent-soft);
+  box-shadow: inset 4px 0 0 var(--ink);
+}
+html[data-skin="arcade"] .mini-queue-item.on .mini-queue-name {
+  color: var(--ink);
+}
+
+/* 小窗也不做悬停下划线动效，理由见上面 7.1 节末尾那三条 —— 与皮肤无关。 */
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="arcade"] .mini-btn:active,
+  html[data-skin="arcade"] .mini-play:active {
+    transform: none;
+  }
+}

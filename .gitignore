@@ -1,0 +1,17 @@
+# 依赖
+node_modules/
+
+# Electron 的用户数据目录：config.json 里存着登录 cookie，
+# local-index.json / download-history.json 是本机的东西，都不能进仓库
+data/
+
+# 开发期的临时脚本、探针与截图（里面还有 cookie.txt、user-config-backup.json 这类本机文件）
+_probe/
+
+# 打包产物（成品发布到 D:\down\Tools\FromAI，不留在源码树）
+dist/
+*.log
+
+# Windows 杂项
+Thumbs.db
+desktop.ini

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' neimg: data: blob:; media-src 'self' https: http: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self' neimg:">
+<title>网易云音乐 Lite</title>
+<!-- boot.js 必须在样式表之前：它把 data-skin 打到 <html> 上，避免首屏闪一下黑底 -->
+<script src="js/boot.js"></script>
+<link rel="stylesheet" href="styles.css">
+<!-- 设置弹窗 / 皮肤菜单的骨架样式。放在 skins.css 之前，皮肤可以覆盖它。 -->
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="skins.css">
+</head>
+<body>
+
+<!-- ============================ 标题栏 ============================ -->
+<header class="titlebar">
+  <div class="tb-left">
+    <div class="tb-logo" title="网易云音乐 Lite">
+      <!-- 与打包 exe 的应用图标同形（月牙 + 气泡圆 + 音符）。
+           形状来自 renderer/assets/logo.svg，颜色用 currentColor，
+           所以每个皮肤只需要管 .tb-logo 自己的 color / background。 -->
+      <span class="tb-logo-mark" aria-hidden="true"></span>
+    </div>
+    <button class="tb-nav" id="navBack" title="后退">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15.5 3.5L7 12l8.5 8.5 1.4-1.4L9.8 12l7.1-7.1z"/></svg>
+    </button>
+    <button class="tb-nav" id="navFwd" title="前进">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M8.5 3.5L17 12l-8.5 8.5-1.4-1.4L14.2 12 7.1 4.9z"/></svg>
+    </button>
+  </div>
+
+  <div class="tb-search">
+    <svg class="tb-search-icon" viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1114 9.5 4.5 4.5 0 019.5 14z"/></svg>
+    <input id="searchInput" type="text" placeholder="搜索歌曲、歌手、歌单" autocomplete="off" spellcheck="false">
+    <button class="tb-search-clear" id="searchClear" hidden>
+      <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+    </button>
+  </div>
+
+  <div class="tb-right">
+    <!-- 皮肤：点击向下展开皮肤列表 -->
+    <div class="tb-skin-wrap">
+      <button class="tb-nav" id="tbSkin" title="皮肤" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 3a9 9 0 000 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1.1.9-2 2-2h2.3A4.7 4.7 0 0022 9.8C22 6 17.5 3 12 3zM7.5 12a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm3-4a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm5 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm3 4a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/></svg>
+      </button>
+      <div class="skin-menu" id="skinMenu" hidden></div>
+    </div>
+    <!-- 设置 -->
+    <button class="tb-nav" id="tbSettings" title="设置">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 8a4 4 0 100 8 4 4 0 000-8zm0 6a2 2 0 110-4 2 2 0 010 4zm8.9-2c0-.5-.05-1-.14-1.47l2.02-1.5-2-3.46-2.35.94a7.9 7.9 0 00-2.55-1.48L15.5 2h-4l-.38 2.53a7.9 7.9 0 00-2.55 1.48l-2.35-.94-2 3.46 2.02 1.5a7.9 7.9 0 000 2.94l-2.02 1.5 2 3.46 2.35-.94a7.9 7.9 0 002.55 1.48L11.5 22h4l.38-2.53a7.9 7.9 0 002.55-1.48l2.35.94 2-3.46-2.02-1.5c.09-.47.14-.97.14-1.47z"/></svg>
+    </button>
+    <!-- 缩成横向小窗（第 7 点） -->
+    <button class="tb-nav" id="tbMiniH" title="横向悬浮小窗">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3 7a4 4 0 014-4h10a4 4 0 014 4v10a4 4 0 01-4 4H7a4 4 0 01-4-4V7zm2 0v10a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2zm3 3h4a2 2 0 012 2v1a2 2 0 01-2 2H8a2 2 0 01-2-2v-1a2 2 0 012-2z"/></svg>
+    </button>
+    <!-- 缩成竖向小窗（第 6 点） -->
+    <button class="tb-nav" id="tbMiniV" title="竖向悬浮小窗">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7 3h10a4 4 0 014 4v10a4 4 0 01-4 4H7a4 4 0 01-4-4V7a4 4 0 014-4zm0 2a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2H7zm3 3h4a2 2 0 012 2v3a2 2 0 01-2 2h-4a2 2 0 01-2-2V10a2 2 0 012-2z"/></svg>
+    </button>
+    <button class="tb-nav" id="tbMinimize" title="最小化"><svg viewBox="0 0 12 12" width="11" height="11"><path fill="currentColor" d="M1 6h10v1H1z"/></svg></button>
+    <button class="tb-nav" id="tbMaximize" title="最大化"><svg viewBox="0 0 12 12" width="11" height="11"><path fill="none" stroke="currentColor" d="M1.5 1.5h9v9h-9z"/></svg></button>
+    <button class="tb-nav tb-close" id="tbClose" title="关闭"><svg viewBox="0 0 12 12" width="11" height="11"><path fill="currentColor" d="M2 1.3L6 5.3l4-4 .7.7-4 4 4 4-.7.7-4-4-4 4-.7-.7 4-4-4-4z"/></svg></button>
+  </div>
+</header>
+
+<div class="shell">
+  <!-- ============================ 侧栏 ============================ -->
+  <aside class="sidebar">
+    <nav class="side-nav">
+      <div class="side-group">在线音乐</div>
+      <a class="side-item" data-nav="daily" data-side="daily">
+        <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M7 2v2h10V2h2v2h2v18H3V4h2V2h2zm12 8H5v10h14V10z"/><path fill="currentColor" d="M11 12h2v6h-2z"/></svg>
+        <span>每日推荐</span>
+        <span class="side-badge" id="dailyBadge" hidden>NEW</span>
+      </a>
+      <a class="side-item" data-nav="radio" data-side="radio">
+        <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M3 6h18v3H3zm0 5h18v9H3zm3 3v3h5v-3z"/></svg>
+        <span>推荐歌单</span>
+      </a>
+      <a class="side-item" data-nav="charts" data-side="charts">
+        <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M4 20h3V10H4zm6.5 0h3V4h-3zM17 20h3v-6h-3z"/></svg>
+        <span>榜单</span>
+      </a>
+      <a class="side-item" data-nav="podcast" data-side="podcast">
+        <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M12 2a10 10 0 00-4 19.2V19a8 8 0 1110 0v2.2A10 10 0 0012 2zm0 5a5 5 0 00-2 9.6V21a1 1 0 002 0v-4.4A5 5 0 0012 7zm0 3a2 2 0 100 4 2 2 0 000-4z"/></svg>
+        <span>播客</span>
+      </a>
+    </nav>
+
+    <nav class="side-nav side-scroll">
+      <div class="side-group">
+        <span>我的音乐</span>
+      </div>
+      <a class="side-item" data-nav="liked" data-side="liked">
+        <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M12 21s-8-5.1-8-11a4.6 4.6 0 018-3.1A4.6 4.6 0 0120 10c0 5.9-8 11-8 11z"/></svg>
+        <span>我喜欢的音乐</span>
+        <span class="side-count" id="likedCount"></span>
+      </a>
+      <a class="side-item" data-nav="recent" data-side="recent">
+        <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M13 3a9 9 0 11-9 9h2a7 7 0 107-7v3l-4.5-4L13 0z"/><path fill="currentColor" d="M12 8h2v5h4v2h-6z"/></svg>
+        <span>最近播放</span>
+      </a>
+      <!-- 正在下载（m01537 第①点）：安卓端侧栏就有这一栏，电脑端原来把「在下的」
+           和「下完的」混在同一页里 —— 一边是百分比进度、一边是能播的歌曲，两种
+           东西挤在一张列表里，谁也没法一眼看明白。拆成两页：这一页只放队列
+           （排队 / 进行中 / 暂停 / 失败），已下载音乐页只放真的能播的本地歌曲。
+           m02003 第①点：它排在「已下载音乐」**上面**（在处理中的在前、归档的在后），
+           图标也统一成同一个下载箭头，让人一眼看出这两页是同一件事的两个阶段。 -->
+      <a class="side-item" data-nav="downloading" data-side="downloading">
+        <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M12 2v11.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4L10 13.2V2h2z"/><path fill="currentColor" d="M4 19h16v2H4z"/></svg>
+        <span>正在下载</span>
+        <span class="side-count" id="dlActiveCount"></span>
+      </a>
+      <!-- 已下载音乐：原来挂在底栏「播放队列」按钮的两片页签里，用户要求独立成侧栏入口。
+           这里只补一条 data-nav="downloads"，导航高亮走 syncNavActive() 的通用
+           `el.dataset.nav === r.name` 判定，不需要额外接线。 -->
+      <a class="side-item" data-nav="downloads" data-side="downloads">
+        <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M12 2v11.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4L10 13.2V2h2z"/><path fill="currentColor" d="M4 19h16v2H4z"/></svg>
+        <span>已下载音乐</span>
+        <span class="side-count" id="dlCount"></span>
+      </a>
+
+      <div class="side-group" id="ownGroup">
+        <button class="side-fold" id="ownFold" title="折叠 / 展开" aria-expanded="true">
+          <svg class="fold-arrow" viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+          <span>创建的歌单</span>
+        </button>
+        <button class="side-add" id="btnCreatePlaylist" title="新建歌单">
+          <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+        </button>
+      </div>
+      <div id="ownPlaylists" class="side-list"></div>
+
+      <div class="side-group" id="subGroup" hidden>
+        <button class="side-fold" id="subFold" title="折叠 / 展开" aria-expanded="true">
+          <svg class="fold-arrow" viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+          <span>收藏的歌单</span>
+        </button>
+      </div>
+      <div id="subPlaylists" class="side-list"></div>
+    </nav>
+
+    <div class="side-foot" id="sideFoot">
+      <button class="login-btn" id="btnLogin">
+        <svg viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.7-9 6v2h18v-2c0-3.3-4-6-9-6z"/></svg>
+        <span>登录网易云</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============================ 主区 ============================ -->
+  <main class="main" id="main">
+    <div class="main-scroll" id="mainScroll"></div>
+  </main>
+</div>
+
+<!-- ============================ 播放条 ============================ -->
+<footer class="playerbar" id="playerbar">
+
+  <div class="pb-left">
+    <div class="pb-cover" id="pbCover">
+      <img id="pbCoverImg" alt="">
+      <div class="pb-cover-fallback"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 3v10.6A4 4 0 1014 17V7h4V3z"/></svg></div>
+    </div>
+    <div class="pb-meta">
+      <div class="pb-title" id="pbTitle">未在播放</div>
+      <div class="pb-artist" id="pbArtist">—</div>
+    </div>
+    <button class="pb-like" id="pbLike" title="喜欢">
+      <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M12 21s-8-5.1-8-11a4.6 4.6 0 018-3.1A4.6 4.6 0 0120 10c0 5.9-8 11-8 11z"/></svg>
+    </button>
+    <button class="pb-comment" id="pbComment" title="查看当前歌曲评论">
+      <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M4 4h16a1 1 0 011 1v11a1 1 0 01-1 1H9l-5 4V5a1 1 0 011-1zm3 4v2h10V8H7zm0 4v2h7v-2H7z"/></svg>
+      <span class="pb-badge" id="pbCommentCount" hidden></span>
+    </button>
+  </div>
+
+  <div class="pb-center">
+    <div class="pb-controls">
+      <button class="pb-btn" id="btnShuffle" title="随机播放">
+        <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M17 3l4 4-4 4V8h-2.2l-2.3 3-1.3-1.7L13.4 6H17V3zM3 6h4.3l2.5 3.3-1.3 1.7L6.6 8H3V6zm14 8v-3l4 4-4 4v-3h-3.6l-2.2-3 1.3-1.7L14.8 14H17zM3 16h3.6l2.2-3 1.3 1.7-2.5 3.3H3v-2z"/></svg>
+      </button>
+      <button class="pb-btn" id="btnPrev" title="上一首">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M7 6h2v12H7zm3 6l9-6v12z"/></svg>
+      </button>
+      <button class="pb-btn pb-play" id="btnPlay" title="播放/暂停">
+        <svg id="iconPlay" viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M7 4l13 8-13 8z"/></svg>
+        <svg id="iconPause" viewBox="0 0 24 24" width="22" height="22" hidden><path fill="currentColor" d="M7 4h4v16H7zm6 0h4v16h-4z"/></svg>
+      </button>
+      <button class="pb-btn" id="btnNext" title="下一首">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M15 6h2v12h-2zM5 18V6l9 6z"/></svg>
+      </button>
+      <button class="pb-btn" id="btnRepeat" title="循环模式">
+        <svg id="iconRepeatList" viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+        <svg id="iconRepeatOne" viewBox="0 0 24 24" width="17" height="17" hidden><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/><text x="12" y="15.5" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor">1</text></svg>
+      </button>
+    </div>
+    <div class="pb-time-row">
+      <span class="pb-time" id="pbCur">00:00</span>
+      <div class="pb-track" id="pbTrack">
+        <div class="pb-track-bg"></div>
+        <div class="pb-track-fill" id="pbTrackFill"></div>
+        <div class="pb-track-knob" id="pbTrackKnob"></div>
+      </div>
+      <span class="pb-time" id="pbDur">00:00</span>
+    </div>
+  </div>
+
+  <div class="pb-right">
+    <button class="pb-btn pb-mode" id="btnQuality" title="音质"><span id="qualityLabel">极高</span></button>
+    <button class="pb-btn" id="btnMute" title="静音">
+      <svg id="iconVol" viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9zm12.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg>
+      <svg id="iconMute" viewBox="0 0 24 24" width="17" height="17" hidden><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9zm14.6 3l2.4-2.4-1.4-1.4L17.2 10.6 14.8 8.2 13.4 9.6 15.8 12l-2.4 2.4 1.4 1.4 2.4-2.4 2.4 2.4 1.4-1.4z"/></svg>
+    </button>
+    <div class="pb-vol" id="pbVol">
+      <div class="pb-vol-bg"></div>
+      <div class="pb-vol-fill" id="pbVolFill"></div>
+      <div class="pb-vol-knob" id="pbVolKnob"></div>
+    </div>
+    <button class="pb-btn" id="btnQueue" title="播放队列">
+      <svg viewBox="0 0 24 24" width="17" height="17"><path fill="currentColor" d="M3 6h13v2H3zm0 5h13v2H3zm0 5h9v2H3zm12 0v-5l6 3z"/></svg>
+      <span class="pb-queue-count" id="queueCount">0</span>
+    </button>
+  </div>
+</footer>
+
+<!-- ============================ 全屏播放页 ============================ -->
+<section class="nowplaying" id="nowplaying" hidden>
+  <div class="np-bg" id="npBg"></div>
+  <div class="np-scrim"></div>
+  <button class="np-close" id="npClose" title="收起">
+    <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 16.4l-6.4-6.4 1.4-1.4L12 13.6l5-5 1.4 1.4z"/></svg>
+  </button>
+
+  <div class="np-body">
+    <div class="np-left">
+      <div class="np-cover-wrap" id="npCoverWrap">
+        <img class="np-cover" id="npCover" alt="">
+        <div class="np-cover-fallback"></div>
+      </div>
+      <div class="np-info">
+        <div class="np-title" id="npTitle">—</div>
+        <div class="np-sub">
+          <span class="np-artist" id="npArtist"></span>
+          <span class="np-dot">·</span>
+          <span class="np-album" id="npAlbum"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="np-right">
+      <div class="np-tabs">
+        <button class="np-tab active" data-nptab="lyric">歌词</button>
+        <button class="np-tab" data-nptab="comments">评论 <span id="npCommentCount"></span></button>
+      </div>
+      <div class="np-pane" id="npLyricPane">
+        <div class="lyric-scroll" id="lyricScroll">
+          <div class="lyric-list" id="lyricList"><div class="lyric-empty">暂无歌词</div></div>
+        </div>
+      </div>
+      <div class="np-pane" id="npCommentPane" hidden>
+        <div class="comments" id="npComments"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 播放队列 ============================ -->
+<aside class="queue-panel" id="queuePanel" hidden>
+  <!-- 这里曾经有一排两片页签（播放队列 / 下载）。m36690 第⑤点把「下载」挪去了
+       侧栏的「已下载音乐」独立页，面板只剩播放队列一种内容，于是页签整排删掉 ——
+       只剩一个选项的页签不是切换控件，是噪音。 -->
+  <div class="qp-head">
+    <span id="qpTitle">播放队列</span>
+    <div class="qp-head-acts">
+      <button class="qp-clear" id="qpClear">清空</button>
+    </div>
+  </div>
+  <div class="qp-list" id="qpList"></div>
+</aside>
+
+<!-- ============================ 登录弹窗 ============================ -->
+<div class="modal-mask" id="loginModal" hidden>
+  <div class="modal login-modal">
+    <button class="modal-x" data-close><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+    <div class="login-head">
+      <h2>登录网易云音乐</h2>
+      <p>登录后可查看我的歌单、每日推荐，并支持收藏歌曲</p>
+    </div>
+
+    <div class="login-tabs">
+      <button class="login-tab active" data-ltab="qr">扫码登录</button>
+      <button class="login-tab" data-ltab="phone">手机号登录</button>
+      <button class="login-tab" data-ltab="cookie">Cookie</button>
+    </div>
+
+    <div class="login-pane" id="paneQr">
+      <div class="qr-wrap">
+        <canvas id="qrCanvas" width="200" height="200"></canvas>
+        <div class="qr-mask" id="qrMask"><div class="qr-mask-inner" id="qrMaskText">二维码加载中…</div></div>
+      </div>
+      <div class="qr-tip" id="qrTip">打开网易云音乐 App，扫描二维码登录</div>
+      <button class="btn-ghost" id="qrRefresh">刷新二维码</button>
+    </div>
+
+    <div class="login-pane" id="panePhone" hidden>
+      <div class="field-row">
+        <select id="phoneCC" class="cc-select">
+          <option value="86">+86</option><option value="852">+852</option><option value="853">+853</option>
+          <option value="886">+886</option><option value="1">+1</option><option value="81">+81</option>
+        </select>
+        <input id="phoneInput" class="text-input" type="tel" placeholder="手机号" maxlength="20">
+      </div>
+      <div class="field-row">
+        <input id="captchaInput" class="text-input" type="text" placeholder="短信验证码" maxlength="8">
+        <button class="btn-side" id="btnSendCaptcha">获取验证码</button>
+      </div>
+      <div class="field-row">
+        <input id="passwordInput" class="text-input" type="password" placeholder="密码（与验证码二选一）">
+      </div>
+      <button class="btn-primary" id="btnPhoneLogin">登录</button>
+      <div class="login-err" id="phoneErr"></div>
+    </div>
+
+    <div class="login-pane" id="paneCookie" hidden>
+      <p class="hint">从浏览器登录 music.163.com 后，按 F12 → Application → Cookies，复制 <code>MUSIC_U</code> 的值，或直接粘贴整条 Cookie 字符串。</p>
+      <textarea id="cookieInput" class="text-area" rows="5" placeholder="MUSIC_U=xxxxx; __csrf=xxxxx; ..."></textarea>
+      <button class="btn-primary" id="btnCookieLogin">使用 Cookie 登录</button>
+      <div class="login-err" id="cookieErr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 加入歌单弹窗 ============================ -->
+<div class="modal-mask" id="addModal" hidden>
+  <div class="modal add-modal">
+    <button class="modal-x" data-close><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+    <h2 id="addModalTitle">添加到歌单</h2>
+    <div class="add-list" id="addList"></div>
+    <div class="add-new">
+      <input id="newPlaylistName" class="text-input" placeholder="新建歌单名称">
+      <button class="btn-side" id="btnNewPlaylist">新建并添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 多歌手选择弹窗 ============================
+     m03577 第⑩点：一首歌有多个歌手时，点歌手名不该盲目跳第一个。
+     列表在 App.openArtistChoice 里按 song.artists 现场渲染，头像异步补。 -->
+<div class="modal-mask" id="artistModal" hidden>
+  <div class="modal artist-modal">
+    <button class="modal-x" data-close><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+    <h2 id="artistModalTitle">选择歌手</h2>
+    <div class="am-list" id="amList"></div>
+  </div>
+</div>
+
+<!-- ============================ 输入弹窗 ============================
+     Electron 里 window.prompt() 直接抛 `prompt() is not supported.`，
+     所以新建 / 重命名歌单必须走这个自绘弹窗（app.js 的 App.askText）。 -->
+<div class="modal-mask" id="askModal" hidden>
+  <div class="modal ask-modal">
+    <h2 id="askTitle">请输入名称</h2>
+    <input id="askInput" class="text-input" type="text" maxlength="40" autocomplete="off" spellcheck="false">
+    <div class="ask-err" id="askErr"></div>
+    <div class="ask-actions">
+      <button class="btn-side" id="askCancel">取消</button>
+      <button class="btn-primary" id="askOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 安全验证弹窗 ============================ -->
+<div class="modal-mask" id="verifyModal" hidden>
+  <div class="modal verify-modal">
+    <button class="modal-x" data-close><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+    <h2>需要安全验证</h2>
+    <p class="verify-tip" id="verifyTip">用手机上的网易云音乐 App 扫描下方二维码，完成验证后即可关注。</p>
+    <div class="qr-wrap verify-qr">
+      <img id="verifyQrImg" alt="安全验证二维码" hidden>
+      <div class="qr-mask" id="verifyQrMask"><div class="qr-mask-inner" id="verifyQrMaskText">二维码加载中…</div></div>
+    </div>
+    <button class="verify-refresh" id="verifyRefresh">刷新二维码</button>
+    <button class="verify-refresh" id="verifyOpenUrl" hidden>在浏览器里打开验证页</button>
+    <button class="btn-side verify-done-btn" id="verifyDone">我已完成验证</button>
+  </div>
+</div>
+
+<!-- ============================ 设置弹窗 ============================ -->
+<div class="modal-mask" id="settingsModal" hidden>
+  <div class="modal settings-modal">
+    <button class="modal-x" data-close><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+    <h2>设置</h2>
+    <div class="set-body">
+      <nav class="set-tabs" id="setTabs"></nav>
+      <div class="set-panes" id="setPanes"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 右键菜单 ============================ -->
+<div class="ctx-menu" id="ctxMenu" hidden></div>
+
+<!-- ============================ Toast ============================ -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="js/util.js"></script>
+<script src="js/lrc.js"></script>
+<script src="js/vendor/qrcode-generator.js"></script>
+<script src="js/qrcode.js"></script>
+<script src="js/api.js"></script>
+<script src="js/store.js"></script>
+<script src="js/player.js"></script>
+<script src="js/views.js"></script>
+<script src="js/skins.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,2434 @@
+/* ============================================================
+   网易云音乐 Lite — 皮肤层（现代白）
+   ============================================================
+
+   本文件不引入任何新的布局，只负责「换肤」。
+
+   机制：皮肤是 <html> 上的一个属性 —— html[data-skin="classic"] /
+   html:is([data-skin="light"], [data-skin="swiss"])。属性由 js/boot.js 在 <head> 里、任何样式表之前
+   写入，运行时由标题栏的皮肤菜单（js/skins.js）改写，**不刷新页面**。
+   因此本文件只用「属性前缀 + 后代选择器」，不依赖任何 JS 重绘：DOM 一动不动，
+   改属性即刻生效，正在播放的进度条、歌词行、计时器都不会被打断。
+
+   为什么这里没有 html[data-skin="classic"] 的规则：styles.css 本身就是经典黑，
+   :root 上那套变量就是它的取值。给 classic 再写一遍只会多出一份必须同步维护的
+   副本。所以本文件只有一块 html:is([data-skin="light"], [data-skin="swiss"])，classic 全部交给 styles.css。
+   同理，「属性缺失」也永远安全 —— 它直接退化成经典黑。
+
+   加载顺序：在主窗口里本文件是最后一张样式表（index.html:10 styles.css →
+   12 settings.css → 13 skins.css），所以同等特指度的规则由本文件胜出。
+   不过为了可读性，凡是覆盖，仍然一律写成 html:is([data-skin="light"], [data-skin="swiss"]) ... 前缀，
+   不去赌源顺序。
+   注意小窗（mini.html）只引 styles.css + mini.css，并不引本文件（mini.html:13-14），
+   所以本文件里那一节「迷你悬浮窗」在小窗中是未挂载的，详见该节开头。
+
+   颜色只写两处：
+     1. 变量层（:root 里那套自定义属性）—— 覆盖它能改掉绝大部分界面；
+     2. 规则层 —— 只处理变量表达不了的：硬编码颜色、渐变、阴影，
+        以及「白底上必须反过来」的那几个组件（进度槽、歌词、二维码遮罩、
+        迷你窗等）。
+
+   全局约定：本文件原则上不新增 border，只改 border-color / background / box-shadow。
+   原因是边框参与盒模型，给一个原本没有边框的元素补上 1px，就可能把内容挤动 2px
+   （甚至让固定宽高的二维码溢出）。需要「多一条线」的地方用 box-shadow: inset
+   0 0 0 1px 或 outline + 负 offset，两者都不占布局。
+
+   唯一的例外是 .login-btn 与 .pb-play 这两个 <button>：styles.css:53 有一条
+   `button { border: none }`，把它们身上的边框整个抹掉了，所以对它们写 border-color
+   是空声明，必须写完整 border 简写才画得出框。好在 styles.css:37 的
+   `* { box-sizing: border-box }` 让补边不改变外框尺寸，两者又都是居中对齐的
+   定尺控件，因此不会挤动布局 —— 这正是「原则上不新增」而非「绝不新增」的原因。
+   ============================================================ */
+
+/* ============================================================
+   一、现代白
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   1.1 变量层
+   ------------------------------------------------------------
+   层次只靠三级灰阶 + 一条发丝线撑起来，不靠阴影：
+     --bg-0  页面底（纯白）
+     --bg-1  抬升面：标题栏 / 侧栏 / 播放条（极浅灰，与纯白只差一点点，
+             靠 --line 的描边把边界说清楚）
+     --bg-2  卡片 / 弹窗 / 队列面板（纯白，用描边立起来）
+     --bg-3  下沉区 / 次级填充（搜索框、进度槽、次级按钮、代码块）
+     --bg-4  下沉区的悬停态，比 --bg-3 再深一档
+
+   强调色换成蓝（#2b63f0）。经典黑的红在纯白上只有 3.9:1，做正文不行、做填充也
+   只是勉强；蓝在同样的位置上都有 5:1 以上。红只保留给「错误」语义。
+
+   下面每一对文字/底色都按 WCAG 2.1 相对亮度公式算过（白底）：
+     --text-0  #111114  ≈ 18.9:1  正文
+     --text-1  #4a4d55  ≈  8.5:1  次级正文
+     --text-2  #5c5f67  ≈  6.4:1  辅助信息（歌手、专辑、统计）
+     --text-3  #696d76  ≈  5.2:1  最弱一档（时长、占位符、空态提示）
+   最弱一档在四级底色上分别是 5.19 / 4.88 / 4.63 / 4.54，全部 ≥ AA 的 4.5:1 ——
+   这是刻意留的余量：经典黑的 --text-3 在自己底色上只有 2.86:1，白皮不该比它更弱。
+   ------------------------------------------------------------ */
+html[data-skin="light"] {
+  /* 强调蓝：填充（按钮、角标、进度）与「当文字用」的激活态都能过 AA。
+     accent-hi 是更深的一档，专门给悬停变蓝的歌名、正在播放的行号这类
+     白底上的文字用 —— 亮一档在白底上反而会糊。 */
+  --accent: #2b63f0;
+  --accent-soft: rgba(43, 99, 240, 0.1);
+  --accent-hi: #1d5bd6;
+  /* 强调色的 R,G,B 三元组：下面规则层里所有需要「同色不同透明度」的地方
+     （logo 投影、卡片播放键投影、头图渐变、每日推荐渐变、队列选中描边）
+     都写成 rgba(var(--accent-rgb), α)，这样换肤时只改这一行，
+     不用去追每一处写死的 rgba(43, 99, 240, …)。 */
+  --accent-rgb: 43, 99, 240;
+
+  --bg-0: #ffffff;
+  --bg-1: #f7f8fa;
+  --bg-2: #ffffff;
+  --bg-3: #f1f2f4;
+  --bg-4: #eef0f3;
+  /* 悬停 / 选中的填充改成「黑色半透明」：白底上做加法（变亮）是看不见的，
+     只有减法（压暗）才做得出一层若有若无的灰 */
+  --bg-hover: rgba(17, 17, 17, 0.045);
+  --bg-active: rgba(17, 17, 17, 0.075);
+
+  --text-0: #111114;
+  --text-1: #4a4d55;
+  --text-2: #5c5f67;
+  --text-3: #696d76;
+
+  /* 发丝线用黑色半透明：合成到白底约 #ececec，到 #f7f8fa 上仍然看得见。
+     line-2 是「需要被注意到」的那一档（输入框描边、弹窗边、表头线）。 */
+  --line: rgba(17, 17, 17, 0.08);
+  --line-2: rgba(17, 17, 17, 0.15);
+
+  /* 尺寸与缓动沿用经典黑：换肤不换骨架，切换时不会有任何位移抖动 */
+  --tb-h: 52px;
+  --pb-h: 74px;
+  --side-w: 224px;
+
+  --radius: 8px;
+  --radius-lg: 12px;
+  /* 线描风格下阴影退到几乎看不见，只留一层「贴着桌面」的托底感；
+     弹窗、右键菜单、悬浮窗、皮肤菜单仍然靠它跟页面分层 */
+  --shadow: 0 6px 20px rgba(17, 17, 17, 0.07);
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* ------------------------------------------------------------
+   1.2 全局：滚动条
+   ------------------------------------------------------------
+   styles.css 里滚动条滑块是写死的 rgba(255,255,255,.11)，白底上等于隐形，
+   必须换成黑色半透明，否则「这里能滚动」这件事完全看不出来。 */
+html:is([data-skin="light"], [data-skin="swiss"]) *::-webkit-scrollbar-thumb {
+  background: rgba(17, 17, 17, 0.16);
+  background-clip: content-box;
+}
+html:is([data-skin="light"], [data-skin="swiss"]) *::-webkit-scrollbar-thumb:hover {
+  background: rgba(17, 17, 17, 0.3);
+  background-clip: content-box;
+}
+
+/* ============================ 标题栏 ============================ */
+/* 标题栏底色、底边线、按钮的浅灰悬停都由变量层接管，无需额外规则。
+   这里只处理三件事：logo 的渐变、搜索框的形态、下拉选项的原生绘制。 */
+
+/* logo：经典黑是「品牌红 → 暗红」的斜向渐变，直接吃 --accent 的话白皮会变成
+   「蓝 → 暗红」，必须连终点一起换掉，改成蓝的同色系两级。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .tb-logo {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hi));
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.28);
+}
+
+/* 搜索框：从「填充块」改成「描边输入框」。
+   经典黑靠 --bg-3 的色块浮在标题栏上；白底上色块几乎看不见，
+   所以改成白底 + 发丝边，聚焦时才把边染成强调色。
+   注意这里同时覆盖 <select> 与清除键：它们都带 outline:none，
+   不给边框就会在白底上彻底消失。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .tb-search {
+  background: var(--bg-2);
+  border-color: var(--line-2);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .tb-search:focus-within {
+  background: var(--bg-2);
+  border-color: var(--accent);
+}
+/* 下拉选项由操作系统绘制：底色必须显式给白，否则在 Windows 深色主题下
+   会渲染成深色块，浅色文字配深底会串味。
+   原先只覆盖了搜索框那个下拉，它已按用户要求删除，改成覆盖全部 select。 */
+html:is([data-skin="light"], [data-skin="swiss"]) select option {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+
+/* 关闭键：只有它保留红底白字 —— 这是约定的系统色，且白字压 #e81123 有 4.6:1。
+   这条必须带 !important：styles.css 的 .tb-close:hover 自己就带了 !important，
+   不加就压不住。这是全文件唯一一处 !important。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .tb-close:hover {
+  background: #e81123 !important;
+  color: #ffffff !important;
+}
+
+/* ============================ 侧栏 ============================ */
+/* 侧栏底色、右边界、分组标题的灰、条目悬停与选中（--accent-soft / --accent-hi）
+   全部由变量层接管。这里只补「白底上必须有边界」的几个图形元素。 */
+
+/* 歌单行开头的 18px 缩略图是 <img>，内阴影会被图片内容盖住，
+   所以改用 outline + 负 offset —— 它画在内容之上，且不占布局。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .side-pl-cover {
+  background: var(--bg-3);
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+}
+/* 注意这里必须写完整 border 简写，不能只写 border-color。
+   styles.css:53 有 `button { border: none }`，而 .login-btn 是个 <button>，
+   它身上本来一根边框都没有 —— 只改 border-color 是空声明，按钮会彻底看不见框。
+   styles.css:37 的 `* { box-sizing: border-box }` 保证补上 1px 边框后外框仍是 36px 高，
+   只是内容盒各缩 1px，而它是 grid + place-items:center，文字照旧居中。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .login-btn {
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  color: var(--text-1);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .login-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+/* VIP 角标压在头像上，它的描边色要跟侧栏底色一致，否则会露出一圈灰边 */
+html:is([data-skin="light"], [data-skin="swiss"]) .user-chip .uc-vip {
+  border-color: var(--bg-1);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .user-chip .uc-avatar img {
+  background: var(--bg-3);
+}
+
+/* ============================ 主区 / 卡片网格 ============================ */
+/* 封面加一圈内描边：白底白卡上，图的边界只能靠线说清楚。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .card-cover {
+  background: var(--bg-3);
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+}
+/* 悬停遮罩：经典黑从底部压一层黑，是为了让白色播放键跳出来；
+   白皮里这层遮罩只需要「有变化」，压得更轻，播放键本身仍是强调蓝 */
+html:is([data-skin="light"], [data-skin="swiss"]) .card-cover::after {
+  background: linear-gradient(to top, rgba(17, 17, 17, 0.26), transparent 55%);
+}
+/* 播放量角标是白字，永远压在一张未知的封面上，
+   所以保留深色投影（浅色封面会让深色文字糊掉） */
+html:is([data-skin="light"], [data-skin="swiss"]) .card-count {
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .card-play {
+  box-shadow: 0 3px 10px rgba(var(--accent-rgb), 0.32);
+}
+
+/* ---- 歌单详情头 ---- */
+/* 184px 大封面在白底上压重阴影会很脏，改成一根内描边 */
+html:is([data-skin="light"], [data-skin="swiss"]) .pl-cover {
+  background: var(--bg-3);
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+  box-shadow: none;
+}
+/* 创建者链接：深色皮里的 #6ea8e8 在纯白上只有 2.6:1，换成强调蓝 */
+html:is([data-skin="light"], [data-skin="swiss"]) .pl-creator .pl-cname {
+  color: var(--accent-hi);
+}
+/* 「歌单」小标签是强调色描边 + 强调色文字，白底上 --accent 只有 5.1:1，
+   12px 小字够用，但把描边压深一档更稳 */
+html:is([data-skin="light"], [data-skin="swiss"]) .pl-tag {
+  border-color: var(--accent-hi);
+  color: var(--accent-hi);
+}
+
+/* ---- 歌曲列表 ---- */
+/* 表头吸顶：底色必须跟主区一致，否则滚动时会在行上方露出白条。
+   底部那条线是整张表的「表头线」，用需要被注意到的那一档。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .tl-head {
+  background: var(--bg-0);
+  border-bottom-color: var(--line-2);
+}
+/* 行与行之间补一条极浅的分隔线：白底上纯靠悬停色区分行太弱，
+   而这里信息密度最高，需要一点表格感。
+   用 inset box-shadow 而非 border-top —— .tl-row 是固定 44px 高，
+   加边框会挤压内容行高，播放中切歌时整列文字会抖一下。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .tl-row + .tl-row {
+  box-shadow: inset 0 1px 0 var(--line);
+}
+/* 32px 缩略图同样是 <img>，用 outline 保证线画在图上 */
+html:is([data-skin="light"], [data-skin="swiss"]) .tl-cover {
+  background: var(--bg-3);
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+}
+/* 标签三色：深色皮里的亮金 / 亮蓝 / 亮红在纯白上对比不足，各压深一档。
+   它们是 9px 描边小字，对比度只能尽量往 4.5:1 靠。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .tl-tag.sq {
+  color: #8a6216;
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .tl-tag.mv {
+  color: var(--accent-hi);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .tl-tag.vip {
+  color: #c9372f;
+}
+
+/* ---- 骨架屏 / 空态 ---- */
+/* 流光的方向和节奏不变，只把两个灰阶换成白皮可用的浅灰 */
+html:is([data-skin="light"], [data-skin="swiss"]) .skeleton {
+  background: linear-gradient(100deg, var(--bg-3) 30%, var(--bg-4) 50%, var(--bg-3) 70%);
+  background-size: 220% 100%;
+}
+/* 卡片骨架也要有描边，否则白底上只剩一个看不见的圆角矩形 */
+html:is([data-skin="light"], [data-skin="swiss"]) .sk-card {
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+/* 空态图标在经典黑里是 30% 不透明度（浅灰压深底，刚好）。白皮里
+   --text-3 已经压到中灰，再乘 30% 就几乎看不见了，提到 45%。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .empty svg {
+  opacity: 0.45;
+}
+
+/* ---- 用户主页 ---- */
+/* 头图兜底：原本是红色透明叠加，在纯白上几乎不可见。改成中性浅灰打底 +
+   一层极淡的强调蓝，保证「没有背景图」时头图区依然是一块有边界的面。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .uh-bg {
+  background-color: var(--bg-3);
+  background-image: linear-gradient(120deg, rgba(var(--accent-rgb), 0.1), rgba(var(--accent-rgb), 0.02) 62%, transparent);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .uh-avatar img {
+  border-color: #ffffff;
+  background: var(--bg-3);
+  box-shadow: 0 2px 10px rgba(17, 17, 17, 0.12);
+}
+/* 头像右下角的 VIP 胶囊：经典黑是金→红渐变，白皮改成金→深金（保留「VIP 是
+   金色的」这层语义），描边色跟着它压着的那圈白走。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .uh-vip {
+  background: linear-gradient(120deg, #9a6c10, #7a5410);
+  border-color: #ffffff;
+}
+/* 用户名旁的镂空 VIP 标：红边红字换成蓝边蓝字，跟强调色统一 */
+html:is([data-skin="light"], [data-skin="swiss"]) .uh-vip-tag {
+  border-color: var(--accent-hi);
+  color: var(--accent-hi);
+}
+
+/* ---- 等级详情 / 用户卡片 ---- */
+/* 这两种「填充块」在白皮里一律拉平到白/浅灰，靠 1px 内描边分块。
+   用 inset box-shadow 是为了不改变已经定好的尺寸。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .lv-row {
+  background: var(--bg-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .lv-bar {
+  background: var(--bg-3);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .ucard {
+  background: var(--bg-2);
+  border-color: var(--line);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .ucard:hover {
+  background: var(--bg-1);
+  border-color: var(--line-2);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .ucard-mutual {
+  background: var(--bg-3);
+}
+
+/* ---- 每日推荐头 ---- */
+/* 经典黑是红色透明渐变 + 红边。白皮里换成极淡的蓝，边界只留一根发丝线 ——
+   这是「线条感」最典型的一处：去掉色块，只留轮廓。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .daily-head {
+  background: linear-gradient(120deg, rgba(var(--accent-rgb), 0.07), rgba(var(--accent-rgb), 0.015) 62%);
+  border-color: var(--line);
+}
+
+/* ---- 歌手 / 专辑详情 ---- */
+/* 圆形头像也是 <img>，用 outline 代替投影 + 底色 */
+html:is([data-skin="light"], [data-skin="swiss"]) .artist-avatar {
+  background: var(--bg-3);
+  box-shadow: none;
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .ad-tag {
+  background: var(--bg-2);
+  border-color: var(--line);
+}
+
+/* ---- 搜索结果页签 ---- */
+/* 未选中的页签底色本来就是透明的，白底上文字要够；选中的下划线是强调色。
+   这里只把容器底线压深一档，让「这是一排页签」看得出来。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .search-tabs {
+  border-bottom-color: var(--line-2);
+}
+
+/* ============================ 播放条 ============================ */
+/* 进度条 / 音量条的底槽在 styles.css 里是写死的 rgba(255,255,255,.1)，
+   白底上等于不存在 —— 这是整个浅色化里最关键的一处硬编码覆盖。
+   旋钮原本是纯白圆点（暗底上像一颗珠子），白底上会消失，
+   所以改成白心 + 深色描边环。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .pb-track-bg,
+html:is([data-skin="light"], [data-skin="swiss"]) .pb-vol-bg {
+  background: rgba(17, 17, 17, 0.12);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .pb-track-knob,
+html:is([data-skin="light"], [data-skin="swiss"]) .pb-vol-knob {
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(17, 17, 17, 0.22), 0 1px 3px rgba(17, 17, 17, 0.28);
+}
+/* 音量已填充部分是中性色（不是强调色），白皮里用 --text-2 保持「次要」的语感；
+   悬停变蓝由 styles.css 的 .pb-vol:hover .pb-vol-fill 负责，不必重写 */
+html:is([data-skin="light"], [data-skin="swiss"]) .pb-vol-fill {
+  background: var(--text-2);
+}
+/* 46px 封面是 <img> 容器（内含 img + 兜底图标），用 outline */
+html:is([data-skin="light"], [data-skin="swiss"]) .pb-cover {
+  background: var(--bg-3);
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+}
+/* 播放键：经典黑是深灰圆 + 悬停变红；白皮改成「白底描边圆 + 悬停灌蓝」，
+   这样静止时它不会在浅色底上糊成一团灰。
+   同样必须写完整 border 简写：.pb-play 是 <button>，被 styles.css:53 的
+   `button { border: none }` 抹掉了边框，只写 border-color 等于没写。
+   `* { box-sizing: border-box }` 保证它还是 37px 的圆，不会比左右按钮大一圈。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .pb-play {
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  color: var(--text-0);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .pb-play:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+/* ============================ 播放队列 ============================ */
+/* 面板底色、边框、投影都走变量；这里只补「正在播放行」在浅底上的可读性：
+   --accent-soft 是 10% 的蓝，配 --accent-hi 的蓝字有 5.2:1，已经够。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .qp-item.playing {
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.16);
+}
+
+/* ============================ 全屏播放 ============================ */
+/* 背景层：经典黑是 blur(64px) 再压到 brightness(.5)，为的是让白字读得出来。
+   浅色皮里封面只当一层「极淡的色纸」，所以拉高亮度、降低饱和度，
+   再由 .np-scrim 铺一层雾面 —— 歌词就落在近白的底上。
+   雾面必须从 --bg-0 调出来，不能写死纯白：现代白的 --bg-0 就是 #ffffff，
+   两者数值等价；瑞士风却是纸白 #f5f2eb，写死纯白会让整个歌词页比皮肤
+   底色更亮更冷，一眼看去像换回了现代白。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .np-bg {
+  filter: blur(64px) saturate(0.85) brightness(1.15);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .np-scrim {
+  background: color-mix(in srgb, var(--bg-0) 92%, transparent);
+}
+/* 关闭键原本是白色半透明（压在深色背景上），白皮要反成黑色半透明 */
+html:is([data-skin="light"], [data-skin="swiss"]) .np-close {
+  background: rgba(17, 17, 17, 0.06);
+  color: var(--text-1);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .np-close:hover {
+  background: rgba(17, 17, 17, 0.12);
+  color: var(--text-0);
+}
+/* 封面：白底上给一根描边 + 一层浅投影就够，不需要 60px 的深投影 */
+html:is([data-skin="light"], [data-skin="swiss"]) .np-cover {
+  background: var(--bg-3);
+  box-shadow: 0 16px 44px rgba(17, 17, 17, 0.16);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .np-cover-fallback {
+  background: var(--bg-3);
+}
+/* 选项卡：白色半透明在浅底上不可见，换成黑色半透明 */
+html:is([data-skin="light"], [data-skin="swiss"]) .np-tab:hover {
+  background: rgba(17, 17, 17, 0.05);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .np-tab.active {
+  background: rgba(17, 17, 17, 0.09);
+  color: var(--text-0);
+}
+
+/* ---- 歌词 ---- */
+/* 这里是全文件唯一「文字整体反转」的地方：经典黑用白色不同透明度做层次，
+   白皮必须换成黑色不同透明度。当前行不再加发光（白底上发光=发糊），
+   改用纯黑 + 字重 + 字号三重区分，层次反而更干净。
+   透明度是算过的：0.58 → 4.6:1、0.60 → 5.0:1、0.72 → 7.6:1、0.78 → 9.6:1。
+   经典黑同位置的非当前行是 4.1:1，所以白皮这里反而略优，没有把可读性做低。
+   注意：只改颜色，不动 font-size / transition —— 歌词行是播放中高频变化的
+   元素，任何会引起重排的改动都会让滚动发抖。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .lyric-line {
+  color: rgba(17, 17, 17, 0.58);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .lyric-line:hover {
+  color: rgba(17, 17, 17, 0.72);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .lyric-line.active {
+  color: var(--text-0);
+  text-shadow: none;
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .lyric-trans {
+  color: rgba(17, 17, 17, 0.6);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .lyric-line.active .lyric-trans {
+  color: rgba(17, 17, 17, 0.78);
+}
+/* 瑞士风的底是纸白 #f5f2eb 而不是纯白，同样 0.58 的黑压上去只有 4.43:1，
+   差一点点没过 AA（4.5）。把非当前行抬到 0.62 → 5.06:1，当前行的纯黑不动。
+   现代白不改（它的底就是纯白，0.58 → 4.61:1 已经够）。 */
+html[data-skin="swiss"] .lyric-line {
+  color: rgba(17, 17, 17, 0.62);
+}
+html[data-skin="swiss"] .lyric-line:hover {
+  color: rgba(17, 17, 17, 0.76);
+}
+
+/* ---- 评论 ---- */
+html:is([data-skin="light"], [data-skin="swiss"]) .cm-avatar {
+  background: var(--bg-3);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .cm-user,
+html:is([data-skin="light"], [data-skin="swiss"]) .cm-reply b {
+  color: var(--accent-hi);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .cm-vip {
+  color: #8a6216;
+}
+/* 楼中楼回复：经典黑是白色 4.5% 的浅色块，白底上要反过来压暗一点 */
+html:is([data-skin="light"], [data-skin="swiss"]) .cm-reply {
+  background: var(--bg-1);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .cm-loadmore {
+  background: var(--bg-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .cm-loadmore:hover {
+  background: var(--bg-3);
+}
+
+/* ============================ 弹窗 ============================ */
+/* 遮罩减轻：白皮里用纯黑遮罩会把整个界面砸黑，跟「白」的基调打架；
+   改用中等灰度 + 原有的 2px 模糊，靠对比而不是靠黑度来聚焦 */
+html:is([data-skin="light"], [data-skin="swiss"]) .modal-mask {
+  background: rgba(17, 17, 17, 0.32);
+}
+/* 弹窗用「白底 + 发丝边 + 浅投影」立起来。
+   投影必须保留一点：它是白弹窗浮在灰遮罩上时唯一的纵向线索。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .modal {
+  background: var(--bg-2);
+  border-color: var(--line-2);
+  box-shadow: 0 20px 50px rgba(17, 17, 17, 0.16);
+}
+/* 登录方式切换：经典黑是深色胶囊槽 + 更亮的选中块；
+   白皮改成浅灰槽 + 纯白选中块。选中块的白边用 inset box-shadow，
+   因为三个 tab 是等分 flex，给其中一个加 border 会让它比另外两个窄 2px。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .login-tabs {
+  background: var(--bg-3);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .login-tab.active {
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+/* 二维码永远是白底黑点（扫得出来比好看重要），所以遮罩和遮罩里的文字
+   也只能是深色 —— 这跟皮肤无关，只是把白底明确写出来。
+   注意不加 border：.qr-wrap 是 200x200 定尺、内边距 10px、画布 180px，
+   补 1px 边框会把画布挤出容器 2px。改用内描边。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .qr-wrap {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .qr-mask {
+  background: rgba(255, 255, 255, 0.95);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .qr-mask-inner {
+  color: #333333;
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .verify-refresh {
+  color: var(--text-1);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .verify-refresh:hover {
+  color: var(--accent);
+}
+/* 登录错误提示：经典黑靠 --accent-hi（红）当错误色，白皮的 --accent-hi 是蓝，
+   直接沿用会让报错变成蓝色 —— 语义丢失，必须显式改回红。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .login-err {
+  color: #c9372f;
+}
+
+/* ---- 输入控件 ---- */
+/* 输入框白底 + 描边，聚焦时边框变蓝、底色保持白 ——
+   经典黑是「聚焦变亮」，白皮只能反过来「聚焦变实」。
+   这里的 border 是 .text-input / .text-area / .cc-select 本来就有的，
+   只改颜色，不新增边框。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .text-input,
+html:is([data-skin="light"], [data-skin="swiss"]) .text-area {
+  background: var(--bg-2);
+  border-color: var(--line-2);
+  color: var(--text-0);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .text-input:focus,
+html:is([data-skin="light"], [data-skin="swiss"]) .text-area:focus {
+  background: var(--bg-2);
+  border-color: var(--accent);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .cc-select {
+  background: var(--bg-2);
+  border-color: var(--line-2);
+  color: var(--text-0);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .cc-select option {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .btn-side {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .btn-side:hover {
+  background: var(--bg-4);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .hint code {
+  background: var(--bg-3);
+  color: var(--text-1);
+}
+
+/* ---- 加入歌单 ---- */
+html:is([data-skin="light"], [data-skin="swiss"]) .add-item img {
+  background: var(--bg-3);
+}
+/* 未选中的圆圈：经典黑是深灰描边，白皮用最弱文字档就够（5.2:1） */
+html:is([data-skin="light"], [data-skin="swiss"]) .add-item .ai-check {
+  border-color: var(--text-3);
+}
+/* 新歌单输入行与列表之间的分隔线在白底上要看得见 */
+html:is([data-skin="light"], [data-skin="swiss"]) .add-new {
+  border-top-color: var(--line-2);
+}
+
+/* ============================ 右键菜单 ============================ */
+html:is([data-skin="light"], [data-skin="swiss"]) .ctx-menu {
+  background: var(--bg-2);
+  border-color: var(--line-2);
+  box-shadow: 0 10px 28px rgba(17, 17, 17, 0.14);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .ctx-item {
+  color: var(--text-1);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .ctx-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-0);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .ctx-sep {
+  background: var(--line);
+}
+
+/* ============================ Toast ============================ */
+/* 经典黑用深底浅字，白皮改成浅底深字；语义色保留（红=错误、绿=成功），
+   只把饱和度压下来，免得三条并排的提示像三个警示灯 */
+html:is([data-skin="light"], [data-skin="swiss"]) .toast {
+  background: var(--bg-2);
+  color: var(--text-0);
+  border-color: var(--line-2);
+  box-shadow: 0 6px 20px rgba(17, 17, 17, 0.12);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .toast.err {
+  background: #fdf1f1;
+  border-color: #f0c9c9;
+  color: #8c1f1f;
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .toast.ok {
+  background: #eef8f1;
+  border-color: #c3e3cf;
+  color: #1c5c34;
+}
+
+/* ============================ 工具类 ============================ */
+/* 通用链接色在 styles.css 里写死成 #6ea8e8（白底 2.6:1），必须换成强调蓝 */
+html:is([data-skin="light"], [data-skin="swiss"]) .link {
+  color: var(--accent-hi);
+}
+
+/* ============================ 迷你悬浮窗 ============================ */
+/* ⚠️ 这一节现在不生效，读之前先看这段。
+   mini.html 只引了 styles.css + mini.css，根本没有引 skins.css（见 mini.html:13-14），
+   所以下面这些规则在小窗里一条都不会被应用。小窗的白皮完全由 mini.css 自己那份
+   html:is([data-skin="light"], [data-skin="swiss"]) 变量块承担（mini.css:43-73）。
+
+   这里保留的是一个「万一将来给 mini.html 补上 skins.css 链接」时的兜底，因此刻意
+   只写两类东西：
+     1. 变量管不到的硬编码（进度槽的白色半透明、歌词的白字层次）；
+     2. 对 mini.css 里已知对比度不足的取值做修正。
+   凡是 mini.css 已经做过、且是它自己的设计决定，本文件一律不重复、不覆盖 ——
+   比如 .mini-card 的底色（mini.css 用 --mini-card-bg = --bg-1，不是纯白）、
+   卡片描边、以及歌词上下渐隐遮罩（mini.css:252 自己写了 10% / 90% 的停靠点，
+   本文件若再写一遍就是替它做设计决定）。
+
+   不要写 html:is([data-skin="light"], [data-skin="swiss"]) .mini —— 那会命中每一个 .mini-* 元素，
+   给整张卡片里的每个部件都描一圈边。必须逐个点名。 */
+/* 进度槽：深色皮里是白色半透明，白底上必须反转，否则整条轨道隐形。
+   只给底槽上色 —— #miniProgress 本身是容器（同 .pb-track），
+   给它铺底色会糊满整个 14px 高的轨道区。 */
+html:is([data-skin="light"], [data-skin="swiss"]) #miniProgress .mini-progress-bg {
+  background: rgba(17, 17, 17, 0.12);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) #miniProgress .mini-progress-fill {
+  background: var(--accent);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) #miniProgress .mini-progress-knob {
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(17, 17, 17, 0.22);
+}
+/* 时间码挂在 #miniProgressRow 上，是 #miniProgress 的兄弟而不是子元素，
+   所以必须从行容器往下选，写成 #miniProgress .mini-time 会永远选不中。 */
+html:is([data-skin="light"], [data-skin="swiss"]) #miniProgressRow .mini-time {
+  color: var(--text-3);
+}
+/* 歌词行：mini.css 的白皮档位是 rgba(17,17,17,.42)，压在纯白上只有 2.78:1，
+   连 AA 都不到（经典黑同位置是 4.1:1）。这里按主窗口同一套实测值修正到 .58
+   （4.61:1）/ .72（7.57:1），当前行用纯黑。只改颜色，不动 font-size ——
+   歌词行是播放中高频变化的元素，任何引起重排的改动都会让滚动发抖。 */
+html:is([data-skin="light"], [data-skin="swiss"]) #miniLyricList .lyric-line {
+  color: rgba(17, 17, 17, 0.58);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) #miniLyricList .lyric-line:hover {
+  color: rgba(17, 17, 17, 0.72);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) #miniLyricList .lyric-line.active {
+  color: #111114;
+  text-shadow: none;
+}
+html:is([data-skin="light"], [data-skin="swiss"]) #miniLyricList .lyric-trans {
+  color: rgba(17, 17, 17, 0.6);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) #miniLyricList .lyric-line.active .lyric-trans {
+  color: rgba(17, 17, 17, 0.78);
+}
+/* 队列当前项：mini.js 用的类名是 .on（mini.js:337），不是 .playing。
+   两种都写上，将来命名若改回 .playing 也不会漏。 */
+html:is([data-skin="light"], [data-skin="swiss"]) #miniQueue .mini-queue-item.on,
+html:is([data-skin="light"], [data-skin="swiss"]) #miniQueue .mini-queue-item.playing {
+  background: var(--accent-soft);
+  color: var(--accent-hi);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) #miniQueue .mini-queue-item.on .mini-queue-name {
+  color: var(--accent-hi);
+}
+
+/* ============================ 皮肤选择器 / 设置面板 ============================ */
+/* 下面这些类名来自 settings.css（标题栏皮肤菜单、设置弹窗）。
+   深色版本由那边负责，这里只写 html:is([data-skin="light"], [data-skin="swiss"]) 变体。
+   注意 settings.css 的选中态类名是 .on，不是 .active；菜单里没有
+   .skin-desc / .skin-check，只有 .skin-name / .skin-tick。
+   皮肤菜单是「浮在白标题栏上的白卡片」，必须自带描边 + 投影才浮得起来。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .skin-menu {
+  background: var(--bg-2);
+  border-color: var(--line-2);
+  box-shadow: 0 12px 32px rgba(17, 17, 17, 0.14);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .skin-item {
+  color: var(--text-1);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .skin-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-0);
+}
+/* 选中项：极浅的蓝底 + 深蓝字，跟侧栏 .side-item.active 用同一套语言 */
+html:is([data-skin="light"], [data-skin="swiss"]) .skin-item.on {
+  background: var(--accent-soft);
+  color: var(--accent-hi);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .skin-item .skin-name {
+  color: var(--text-0);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .skin-item.on .skin-name {
+  color: var(--accent-hi);
+}
+/* 色板小方块：两套皮肤各自的原色。白皮上给它一圈内描边，
+   否则「现代白」那块纯白色板会直接融进菜单背景里。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .skin-swatch {
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+/* 设置弹窗：左栏浅灰导航 + 右栏白色内容，用一根竖线分开。
+   settings.css 里左栏是 .set-tabs（不是 .set-rail），选中态是 .on。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .settings-modal {
+  background: var(--bg-2);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-tabs {
+  border-right-color: var(--line);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-tab {
+  color: var(--text-2);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-0);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-tab.on {
+  background: var(--accent-soft);
+  color: var(--accent-hi);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-panes {
+  background: var(--bg-2);
+}
+/* 每一行设置项之间用发丝线分隔，最后一行不留线 */
+html:is([data-skin="light"], [data-skin="swiss"]) .set-row {
+  border-bottom-color: var(--line);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-label {
+  color: var(--text-0);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-desc {
+  color: var(--text-3);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-select,
+html:is([data-skin="light"], [data-skin="swiss"]) .set-num {
+  background: var(--bg-2);
+  border-color: var(--line-2);
+  color: var(--text-0);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-select option {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+/* 开关：关=浅灰槽 + 深灰滑块，开=强调蓝槽 + 白滑块。
+   白色滑块落在白色弹窗上会丢，所以补一圈描边 + 极浅投影。 */
+html:is([data-skin="light"], [data-skin="swiss"]) .set-switch {
+  background: var(--bg-4);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-switch::after {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(17, 17, 17, 0.25);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-switch.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+/* 侧边栏个性化列表：白底上要有一圈容器边才成块 */
+html:is([data-skin="light"], [data-skin="swiss"]) .set-side-list {
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-side-item {
+  color: var(--text-1);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .set-side-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-0);
+}
+/* 关于页里的代码片段与链接 */
+html:is([data-skin="light"], [data-skin="swiss"]) .set-about code {
+  background: var(--bg-3);
+  color: var(--text-1);
+}
+/* 键盘焦点环：白皮里 --line-2 太淡，用强调色才看得见。
+   只在 :focus-visible 下出现，鼠标点击不会留下蓝圈。
+   outline 不参与盒模型，不会挤动任何东西。 */
+html:is([data-skin="light"], [data-skin="swiss"]) #tbSkin:focus-visible,
+html:is([data-skin="light"], [data-skin="swiss"]) #tbSettings:focus-visible,
+html:is([data-skin="light"], [data-skin="swiss"]) #tbMiniH:focus-visible,
+html:is([data-skin="light"], [data-skin="swiss"]) #tbMiniV:focus-visible,
+html:is([data-skin="light"], [data-skin="swiss"]) .skin-item:focus-visible,
+html:is([data-skin="light"], [data-skin="swiss"]) .set-tab:focus-visible,
+html:is([data-skin="light"], [data-skin="swiss"]) .set-switch:focus-visible,
+html:is([data-skin="light"], [data-skin="swiss"]) .set-select:focus-visible,
+html:is([data-skin="light"], [data-skin="swiss"]) .set-num:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* 皮肤选择器的定位锚点由 settings.css 提供，这里不重复声明；
+   新加的标题栏按钮（#tbSettings / #tbMiniH / #tbMiniV）都是 .tb-nav，
+   上面那条 .tb-nav:hover 已经覆盖，无需重复。 */
+
+/* ============================================================
+   二、减少动效
+   ------------------------------------------------------------
+   styles.css 已经为歌词别名滚动单独写过一段 prefers-reduced-motion；
+   本文件本身没有新增任何 animation，但 settings.css 给皮肤菜单加了入场动画，
+   给皮肤项 / 设置页签 / 开关加了过渡。这里在用户要求减少动效时把它们一并关掉，
+   保证「本文件涉及的交互元素」在该模式下都是瞬时的。
+   其余规则都是静态颜色覆盖，本来就没有动画，不必重复声明。
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  html:is([data-skin="light"], [data-skin="swiss"]) .skin-menu {
+    animation: none;
+  }
+  html:is([data-skin="light"], [data-skin="swiss"]) .skin-item,
+  html:is([data-skin="light"], [data-skin="swiss"]) .set-tab,
+  html:is([data-skin="light"], [data-skin="swiss"]) .set-switch,
+  html:is([data-skin="light"], [data-skin="swiss"]) .set-switch::after,
+  html:is([data-skin="light"], [data-skin="swiss"]) .set-side-item,
+  html:is([data-skin="light"], [data-skin="swiss"]) .mini-btn {
+    transition: none;
+  }
+  /* 悬停下划线动效（3.2 节）的过渡也一起关掉。它们挂在 ::after 上，
+     上面那组只覆盖了元素自身和 .set-switch::after，漏了下划线本体 ——
+     不加这一段的话，开了「减少动效」后下划线仍会慢慢长大。 */
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .side-item::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .login-btn::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .btn-side::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .cm-loadmore::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .ctx-item::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .np-tab::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .pb-mode::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .section-more::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .link::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .skin-item::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .set-tab::after,
+  html:is([data-skin="swiss"], [data-skin="sunset"]) .set-side-item::after {
+    transition: none;
+  }
+}
+
+/* ============================================================
+   三、瑞士风
+   ============================================================
+   取色来自参考图（国际主义排版海报）：
+     纸白底 #f2efe7      正红 #e93b1a      墨黑 #141414
+   参考图里的红直接当文字用只有 3.48:1，压深到 #d63412 之后
+   白字压填充 4.82:1、当文字用对最深的 --bg-1 有 5.64:1，两边都过 AA。
+
+   造型语言：网格、无衬线、左对齐、客观。
+   和前两款皮肤最大的区别在「线」：经典黑靠色块分层，现代白靠描边，
+   瑞士风靠**细横线**——表头、分栏、按钮悬停，全用一根 2px 的规则线说话。
+   所以这一节的重点是悬停下划线动效，其余只做减法（去阴影、去圆角）。
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   3.1 变量层
+   ------------------------------------------------------------ */
+html[data-skin="swiss"] {
+  --accent: #d63412;
+  --accent-soft: rgba(214, 52, 18, 0.1);
+  --accent-hi: #b02809;
+  --accent-rgb: 214, 52, 18;
+
+  /* 纸白四级：--bg-0 是纸，--bg-2 是更亮的一层（卡片像单独贴上去的白纸），
+     --bg-3 / --bg-4 是压下去的两档灰 */
+  --bg-0: #f5f2eb;
+  --bg-1: #efece4;
+  --bg-2: #fbf9f4;
+  --bg-3: #e9e4d8;
+  --bg-4: #ded8c9;
+  --bg-hover: rgba(17, 17, 17, 0.05);
+  --bg-active: rgba(17, 17, 17, 0.09);
+
+  --text-0: #111111;
+  --text-1: #3c3c3c;
+  --text-2: #555555;
+  --text-3: #5f5f5f;
+
+  --line: rgba(17, 17, 17, 0.1);
+  --line-2: rgba(17, 17, 17, 0.22);
+
+  --tb-h: 52px;
+  --pb-h: 74px;
+  --side-w: 224px;
+
+  /* 瑞士风的圆角是「几乎没有」：留 2px 只是为了不让边框在低分屏上
+     看起来像缺了一个像素，不是装饰。 */
+  --radius: 2px;
+  --radius-lg: 2px;
+
+  /* 参考图里没有任何投影，全是平面的线与面。这里只给真正需要浮起来的
+     东西（弹窗、右键菜单、皮肤菜单、悬浮窗）留一层极浅的托底。 */
+  --shadow: 0 4px 14px rgba(17, 17, 17, 0.08);
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* ------------------------------------------------------------
+   3.2 悬停下划线动效（本皮肤的核心交互）
+   ------------------------------------------------------------
+   要求：鼠标挪到按钮上时，在文字下方从左到右、先慢再快地长出一道下划线，
+   挪走之后消失。
+
+   做法：::after 画一根 2px 的线，transform: scaleX(0) → scaleX(1)，
+   transform-origin: left center —— 所以它一定是「从左往右长」，
+   而且 scaleX 只缩 X 轴，2px 的线不会在动画中途变粗。
+
+   为什么用伪元素而不是 background-image：
+     1) 伪元素是独立的盒，在它身上写 transition 不会覆盖按钮自己的
+        transition（.side-item 的 background/color、.np-tab 的 color…）；
+     2) 不改按钮的 background-image，也就不会撞上 .np-tab 已有的渐变。
+   代价是父元素要 position: relative。这些按钮都没有依赖外层定位的
+   绝对定位子元素，加了不会改变任何元素的落点，也不产生层叠上下文
+   （position: relative 且 z-index: auto 不建栈）。
+
+   「先慢再快」= ease-in：cubic-bezier(0.62, 0, 0.9, 0.35)。
+   注意 CSS 过渡读的是**变化之后**那个状态的 transition，所以进场用
+   :hover 里的 ease-in，退场用基础规则里的 ease-out —— 移开时是干脆地
+   从右往左收回去，而不是拖泥带水地停在那里。
+
+   动效开关：settings.css 的 body.no-anim 已经对 *::before / *::after 下了
+   transition: none !important，下面 prefers-reduced-motion 那段再兜一次。
+
+   小窗不做这条动效（用户 m26014 明确要求去掉）。除了「小窗不引本文件」这个
+   既成事实，本身也不适合：那一排按钮是圆的（.mini-btn 直径 32px，横版 30px），
+   线是直的，两者在底边对不上 —— 线按 left/right:7px 排出来 18px，而 bottom:1px
+   处圆的弦只有 11.1px，每侧多出约 3.5px 戳到圆外；#miniPlay 更明显（38px 圆、
+   弦 12.2px、线 24px，每侧多出约 5.9px）。要藏住得压到 bottom:3px，那已经贴到
+   图标下面了。所以 mini.css 里不留任何 ::after 规则，那里有完整的说明。
+   ------------------------------------------------------------ */
+
+/* 通用外观：所有目标共用同一根线。
+   这一组（外观 + 定位 + 进场）由瑞士风与落日余晖**共用** —— 两款的差别只在线的
+   颜色（都取 var(--accent)）和选中态怎么标记，动效本身一个字都不该有两个版本。
+   凡是「怎么标记选中」这类各皮肤自己的设计决定，仍然留在下面单独写。 */
+html:is([data-skin="swiss"], [data-skin="sunset"]) .side-item::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .login-btn::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .btn-side::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .cm-loadmore::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .ctx-item::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .np-tab::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .pb-mode::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .section-more::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .link::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .skin-item::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .set-tab::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .set-side-item::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  pointer-events: none;
+  /* 退场：稍快一点的 ease-out，移开就干净地收掉 */
+  transition: transform 0.18s cubic-bezier(0.33, 0, 0.2, 1);
+}
+
+/* 定位锚点 + 各自的左右内缩（避免线顶到圆角/描边上） */
+html:is([data-skin="swiss"], [data-skin="sunset"]) .side-item,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .login-btn,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .btn-side,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .cm-loadmore,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .ctx-item,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .np-tab,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .pb-mode,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .section-more,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .link,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .skin-item,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .set-tab,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .set-side-item {
+  position: relative;
+}
+html:is([data-skin="swiss"], [data-skin="sunset"]) .side-item::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .ctx-item::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .cm-loadmore::after {
+  left: 9px;
+  right: 9px;
+}
+html:is([data-skin="swiss"], [data-skin="sunset"]) .login-btn::after {
+  left: 14px;
+  right: 14px;
+}
+html:is([data-skin="swiss"], [data-skin="sunset"]) .btn-side::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .np-tab::after {
+  left: 12px;
+  right: 12px;
+}
+html:is([data-skin="swiss"], [data-skin="sunset"]) .pb-mode::after {
+  left: 9px;
+  right: 9px;
+}
+html:is([data-skin="swiss"], [data-skin="sunset"]) .skin-item::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .set-tab::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .set-side-item::after {
+  left: 8px;
+  right: 8px;
+}
+html:is([data-skin="swiss"], [data-skin="sunset"]) .section-more::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .link::after {
+  left: 0;
+  right: 0;
+  bottom: -2px;
+}
+/* .link 在 styles.css 里自带 :hover{text-decoration:underline}，那是「瞬间
+   出现」的一根线，会和这条动效线叠成两条。这里把原生的关掉，只留动效。 */
+html:is([data-skin="swiss"], [data-skin="sunset"]) .link:hover {
+  text-decoration: none;
+}
+
+/* 进场：先慢再快。同时覆盖 hover 与键盘 focus，两者观感一致。 */
+html:is([data-skin="swiss"], [data-skin="sunset"]) .side-item:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .side-item:focus-visible::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .login-btn:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .login-btn:focus-visible::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .btn-side:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .btn-side:focus-visible::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .cm-loadmore:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .cm-loadmore:focus-visible::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .ctx-item:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .np-tab:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .np-tab:focus-visible::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .pb-mode:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .pb-mode:focus-visible::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .section-more:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .link:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .skin-item:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .skin-item:focus-visible::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .set-tab:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .set-tab:focus-visible::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .set-side-item:hover::after,
+html:is([data-skin="swiss"], [data-skin="sunset"]) .set-side-item:focus-visible::after {
+  transform: scaleX(1);
+  transition: transform 0.34s cubic-bezier(0.62, 0, 0.9, 0.35);
+}
+/* 已经选中的条目（侧栏当前页、当前设置页签、当前皮肤）下划线常驻：
+   瑞士风用「一条红线」代替经典黑的色块底、现代白的浅蓝底来标记选中。 */
+html[data-skin="swiss"] .side-item.active::after,
+html[data-skin="swiss"] .set-tab.on::after,
+html[data-skin="swiss"] .skin-item.on::after,
+html[data-skin="swiss"] .np-tab.active::after {
+  transform: scaleX(1);
+}
+/* 选中的条目底色一律去掉 —— 标记只留那根红线。
+   .np-tab.active 也要算进来：共享浅底块给了它一块 rgba(17,17,17,0.09) 的
+   灰底，再叠一根红线就成了「两种标记说同一件事」，与侧栏那套不一致。 */
+html[data-skin="swiss"] .side-item.active,
+html[data-skin="swiss"] .set-tab.on,
+html[data-skin="swiss"] .skin-item.on,
+html[data-skin="swiss"] .np-tab.active {
+  background: none;
+}
+
+/* ------------------------------------------------------------
+   3.3 减法：去圆角、去渐变、去阴影
+   ------------------------------------------------------------ */
+html[data-skin="swiss"] .tb-logo,
+html[data-skin="swiss"] .tb-nav,
+html[data-skin="swiss"] .tb-search,
+html[data-skin="swiss"] .tb-search-clear,
+html[data-skin="swiss"] .uc-avatar img,
+html[data-skin="swiss"] .uc-vip,
+html[data-skin="swiss"] .card-play,
+html[data-skin="swiss"] .pl-creator img,
+html[data-skin="swiss"] .pl-tag,
+html[data-skin="swiss"] .tl-row,
+html[data-skin="swiss"] .tl-tag,
+html[data-skin="swiss"] .uh-avatar img,
+html[data-skin="swiss"] .uh-vip,
+html[data-skin="swiss"] .uh-vip-tag,
+html[data-skin="swiss"] .ucard,
+html[data-skin="swiss"] .artist-avatar,
+html[data-skin="swiss"] .ad-tag,
+html[data-skin="swiss"] .pb-cover,
+html[data-skin="swiss"] .pb-btn,
+html[data-skin="swiss"] .pb-play,
+html[data-skin="swiss"] .pb-track-knob,
+html[data-skin="swiss"] .pb-vol-knob,
+html[data-skin="swiss"] .qp-item,
+/* 队列面板的两页签在 m36690 第⑤点随下载列表一起删掉了，这里的
+   `html[data-skin="swiss"] .qp-tab` 也就没了对象，一并移除。 */
+html[data-skin="swiss"] .np-close,
+/* .np-cover 自己就是那个 <img>（不是 .np-cover img —— 它没有子元素），
+   20px 圆角写死在 styles.css:807，没走 --radius，变量收窄管不到。 */
+html[data-skin="swiss"] .np-cover,
+html[data-skin="swiss"] .np-cover-fallback,
+html[data-skin="swiss"] .np-tab,
+html[data-skin="swiss"] .cm-avatar,
+html[data-skin="swiss"] .cm-loadmore,
+html[data-skin="swiss"] .modal-x,
+html[data-skin="swiss"] .login-tab,
+html[data-skin="swiss"] .ai-check,
+html[data-skin="swiss"] .btn-ghost,
+html[data-skin="swiss"] .ctx-item,
+html[data-skin="swiss"] .toast,
+html[data-skin="swiss"] .skin-swatch,
+html[data-skin="swiss"] .skin-item,
+html[data-skin="swiss"] .set-tab,
+html[data-skin="swiss"] .set-side-item,
+/* 漏网之鱼：这些元素在 styles.css / settings.css 里
+   写死了 px 圆角，没走 --radius，所以变量收窄管不到它们。 */
+html[data-skin="swiss"] .side-add,
+html[data-skin="swiss"] .side-pl-cover,
+html[data-skin="swiss"] .btn-play-all,
+html[data-skin="swiss"] .btn-outline,
+html[data-skin="swiss"] .tl-act,
+html[data-skin="swiss"] .tl-cover,
+html[data-skin="swiss"] .pb-queue-count,
+html[data-skin="swiss"] .settings-modal,
+html[data-skin="swiss"] .set-select,
+html[data-skin="swiss"] .set-switch,
+html[data-skin="swiss"] .set-switch::after,
+html[data-skin="swiss"] .qp-del,
+html[data-skin="swiss"] .qp-dl-vip,
+html[data-skin="swiss"] .qp-dl-bar,
+html[data-skin="swiss"] .qp-dl-bar i,
+html[data-skin="swiss"] .add-item,
+html[data-skin="swiss"] .add-item img,
+html[data-skin="swiss"] .login-tabs,
+html[data-skin="swiss"] .cc-select,
+html[data-skin="swiss"] .cm-reply,
+html[data-skin="swiss"] .hint code,
+html[data-skin="swiss"] .cm-vip,
+html[data-skin="swiss"] .pb-badge,
+html[data-skin="swiss"] .search-tab,
+/* 多选工具条与复选框（m34266 第 1 点）。.tl-check 的形状写在裸类上，所以
+   这条（0,2,1）的确压得住它的 .tl-check{border-radius:3px}（0,1,0）。 */
+html[data-skin="swiss"] .tl-check,
+html[data-skin="swiss"] .tl-selbar {
+  border-radius: 0;
+}
+html[data-skin="swiss"] .pb-track-bg,
+html[data-skin="swiss"] .pb-track-fill,
+html[data-skin="swiss"] .pb-vol-bg,
+html[data-skin="swiss"] .pb-vol-fill,
+html[data-skin="swiss"] .lv-bar,
+html[data-skin="swiss"] .lv-bar-fill {
+  border-radius: 0;
+}
+
+/* logo：斜向渐变 → 一块正红实心方块（参考图里那个红十字方块的位置） */
+html[data-skin="swiss"] .tb-logo {
+  background: var(--accent);
+  box-shadow: none;
+}
+/* VIP 胶囊：金→深金渐变改平涂，瑞士风不承认「金色」这层装饰 */
+html[data-skin="swiss"] .uh-vip {
+  background: var(--accent);
+}
+/* 卡片播放键与播放条播放键：平涂红、无投影 */
+html[data-skin="swiss"] .card-play {
+  box-shadow: none;
+}
+/* 全屏播放页封面：44px 的软投影属于经典黑的「浮起来」语言，瑞士风是
+   平贴纸面 —— 去掉投影，改用 1px 描边收边（与 .pl-cover 同一套做法）。
+   这里必须用 outline 而不是 inset box-shadow：.np-cover 是个 <img>，
+   替换元素的 inset 阴影不会绘制（图本身把它盖住）。 */
+html[data-skin="swiss"] .np-cover {
+  box-shadow: none;
+  outline: 1px solid var(--line-2);
+  outline-offset: -1px;
+}
+html[data-skin="swiss"] .pb-play {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+html[data-skin="swiss"] .pb-play:hover {
+  background: var(--accent-hi);
+  border-color: var(--accent-hi);
+}
+/* 每日推荐头：红渐变 → 一根左侧红线 + 纸面 */
+html[data-skin="swiss"] .daily-head {
+  background: var(--bg-3);
+  border-color: var(--line);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+/* 用户页头图兜底：底部一根 6px 红线。
+   必须画在 ::after 上而不是 .uh-bg 的 background ——
+   否则 `background-size: 100% 6px` 会把用户设的真背景图一起压扁。 */
+html[data-skin="swiss"] .uh-bg {
+  position: relative;
+  background-color: var(--bg-3);
+}
+html[data-skin="swiss"] .uh-bg::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  pointer-events: none;
+  background: var(--accent);
+}
+
+/* 标题栏底边 / 播放条顶边：各一根 2px 正红细线。
+   参考图（国际主义海报）通篇靠「细红线 + 黑字」切分版面，红线是这套
+   皮肤唯一的装饰。把色带贴在边框位置上，不动盒模型 ——
+   52px 的标题栏补 1px 边框会把里面垂直居中的一行挤歪。
+   这里用 background-origin: border-box 盖住原有发丝线，再把边框色清成
+   透明，色带的下沿就是真正的边界。 */
+html[data-skin="swiss"] .titlebar {
+  background-color: var(--bg-1);
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: left bottom;
+  background-size: 100% 2px;
+  border-bottom-color: transparent;
+}
+html[data-skin="swiss"] .playerbar {
+  background-color: var(--bg-1);
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: left top;
+  background-size: 100% 2px;
+  border-top-color: transparent;
+}
+/* 正在播放的队列行：去掉浅红底，改用左侧红线标记 */
+html[data-skin="swiss"] .qp-item.playing {
+  background: none;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+/* 大标题：瑞士风的标题是「粗、紧、左对齐」，只收紧字距不动字号
+   （动字号会让所有页面的首屏高度变化，属于换肤不该做的事） */
+html[data-skin="swiss"] .page-title,
+html[data-skin="swiss"] .pl-name,
+html[data-skin="swiss"] .np-title {
+  letter-spacing: -0.4px;
+}
+/* 分节标题：全部转成小号大写字距标签，对应参考图里 01/02/03/04 的那排栏标 */
+html[data-skin="swiss"] .section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   四、落日余晖
+   ============================================================
+   取色来自参考图（地平线上一轮落日的摄影图）：
+     天空顶部 暗棕 #5a3a30  →  中部 暖棕 #8a4a35  →  地平线 亮橙 #d4784a
+     太阳     橙金 #ef8a5c（柔和发光，边缘晕开）
+     地面     近黑 #0e0c0b，草线 #3a2a20
+
+   这是**第二款深色皮肤**，和经典黑刻意拉开两点：
+     1) 色相偏暖 —— 底色是带红的褐黑（#121010/#1b1715），不是中性灰黑；
+        正文是暖白 #f2e9df（像被夕照过），而不是冷白。
+     2) 强调色是橙金 —— 太阳那个橙，而不是经典黑的品牌红。
+
+   对比度（WCAG 2.1，五级底全套验算过）：
+     --accent     #bd5730  白字压填充 4.60:1 ✓（角标 / 播放键 / 开关）
+     --accent-hi  #ef8a5c  当文字用对最亮的 --bg-4 仍有 5.24:1 ✓
+     --text-0..3  worst 分别 10.84 / 6.81 / 4.80 / 3.85
+   参考图里的太阳原色 #ef8a5c 直接当填充太亮（白字压上去只有 2.48:1），
+   所以它只做「当文字用」的那一档；填充压深到 #bd5730。
+   顺带一提：这四项都比经典黑的既有水准更好（经典黑白字压 accent 是 3.89、
+   --text-3 只有 2.86）。
+
+   造型语言：**地平线**。参考图是一条从天到地的三段式 —— 渐暗的天空、一轮
+   发光的落日、近乎全黑的地面。所以这一节的核心是两条横向光带：标题栏底边
+   = 地平线（暖橙渐变），侧栏与播放条的选中态 = 左侧一道夕照。悬停下划线
+   动效与瑞士风共用（见 3.2 节的 :is() 分组），配色由这里的 --accent 决定。
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   4.1 变量层
+   ------------------------------------------------------------ */
+html[data-skin="sunset"] {
+  --accent: #bd5730;
+  --accent-soft: rgba(189, 87, 48, 0.20);
+  --accent-hi: #ef8a5c;
+  --accent-rgb: 189, 87, 48;
+
+  /* 暖褐黑五级：--bg-0 是地面（最暗），往上每一级抬一点，
+     --bg-2 是卡片（比页面底亮一档，像被夕照到的那块） */
+  --bg-0: #121010;
+  --bg-1: #1b1715;
+  --bg-2: #241e1a;
+  --bg-3: #2e2620;
+  --bg-4: #3a2f26;
+  /* 深底上做加法（提亮）才看得见，所以悬停用白色半透明。
+     底色本来就带红，这里用纯白而不是暖白，避免叠加后偏色。 */
+  --bg-hover: rgba(255, 255, 255, 0.055);
+  --bg-active: rgba(255, 255, 255, 0.095);
+
+  /* 暖白正文：深底上用纯白会偏冷、和夕照的色调打架 */
+  --text-0: #f2e9df;
+  --text-1: #c9b9a9;
+  --text-2: #ab9b83;
+  --text-3: #968a7b;
+
+  /* 发丝线也用暖白半透明，跟底色同一个色系 */
+  --line: rgba(242, 233, 223, 0.08);
+  --line-2: rgba(242, 233, 223, 0.15);
+
+  --tb-h: 52px;
+  --pb-h: 74px;
+  --side-w: 224px;
+
+  /* 圆角沿用经典黑：落日是柔和的，不是硬边的，所以不动骨架 */
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  /* 深底上的投影要压得比经典黑更重才看得出层次（经典黑是 0 8px 32px .45） */
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* ------------------------------------------------------------
+   4.2 地平线：标题栏底边与播放条顶边
+   ------------------------------------------------------------
+   参考图最显眼的就是那条「天空 → 地面」的分界。这里把它压成 3px 的一条
+   横向渐变带贴上去：左端偏红（近地平线的暖橙），右端偏金（太阳那一侧），
+   中间过渡。做法与其它皮肤一致 —— 不动盒模型，52px 的标题栏补 1px 边框
+   会把里面垂直居中的一行挤歪，所以色带贴边、边框色清透明。
+   ------------------------------------------------------------ */
+html[data-skin="sunset"] .titlebar {
+  background-color: var(--bg-1);
+  background-image: linear-gradient(90deg, #a8431f 0%, #ef8a5c 45%, #d4784a 75%, #8a4a35 100%);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: left bottom;
+  background-size: 100% 3px;
+  border-bottom-color: transparent;
+}
+/* 播放条顶边：同一套暖橙，但方向反过来（左金右红），跟标题栏呼应而不是重复 */
+html[data-skin="sunset"] .playerbar {
+  background-color: var(--bg-1);
+  background-image: linear-gradient(90deg, #8a4a35 0%, #d4784a 25%, #ef8a5c 55%, #a8431f 100%);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: left top;
+  background-size: 100% 3px;
+  border-top-color: transparent;
+}
+
+/* ------------------------------------------------------------
+   4.3 夕照：选中态一律用左侧一道橙杠
+   ------------------------------------------------------------
+   深底上做「整块变亮」的选中底色，会把原本靠明度区分的主次关系压平；
+   改用左侧一道 3px 橙杠做标记 —— 和瑞士风那根下划线是同一套思路
+   （少即是多），但方向改成竖的，两款皮肤才不会看起来一样。
+   一律用 inset box-shadow 而不是 border-left：这些都是定高元素
+   （.side-item 34px、.qp-item 有 padding），加边框会把内容挤动。
+   ------------------------------------------------------------ */
+html[data-skin="sunset"] .side-item.active {
+  background: var(--accent-soft);
+  color: var(--accent-hi);
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 var(--accent-hi);
+}
+html[data-skin="sunset"] .side-item.active svg {
+  color: var(--accent-hi);
+}
+html[data-skin="sunset"] .qp-item.playing {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent-hi);
+}
+html[data-skin="sunset"] .qp-item.playing .qp-name {
+  color: var(--accent-hi);
+}
+/* 侧栏 / 设置页签 / 皮肤项的选中态：底色保留（深底上这层橙雾看得见），
+   再叠一道左侧橙杠，和下划线一起构成「选中」标记 */
+html[data-skin="sunset"] .set-tab.on,
+html[data-skin="sunset"] .skin-item.on {
+  box-shadow: inset 3px 0 0 var(--accent-hi);
+}
+
+/* 每日推荐头：经典黑是红色透明渐变 + 红边，这里改成「落日在地平线上」
+   —— 左侧一道橙杠 + 一层从暖橙到透明的横向渐变，像夕照斜打进画面 */
+html[data-skin="sunset"] .daily-head {
+  background:
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0.04) 62%, transparent),
+    var(--bg-3);
+  border-color: rgba(var(--accent-rgb), 0.28);
+  box-shadow: inset 4px 0 0 var(--accent-hi);
+}
+
+/* 用户页头图兜底：底部一条 6px 的地平线光带。
+   必须画在 ::after 上而不是 .uh-bg 自己的 background ——
+   views.js 里 .uh-bg 会带 inline 的 background-image（用户设了背景图时），
+   inline 只覆盖 background-image，不覆盖 background-size，
+   写在元素上的 `100% 6px` 会把用户那张真图一起压扁（实测过）。 */
+html[data-skin="sunset"] .uh-bg {
+  position: relative;
+  background-color: var(--bg-3);
+  background-image: linear-gradient(120deg, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0.05) 62%, transparent);
+}
+html[data-skin="sunset"] .uh-bg::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  pointer-events: none;
+  background: linear-gradient(90deg, #a8431f 0%, #ef8a5c 45%, #d4784a 75%, #8a4a35 100%);
+}
+
+/* ------------------------------------------------------------
+   4.4 落日的发光：把几处实心块换成暖橙
+   ------------------------------------------------------------ */
+/* logo：经典黑是「品牌红 → 暗红」，这里换成「夕照橙 → 深橙」，同色系两级 */
+html[data-skin="sunset"] .tb-logo {
+  background: linear-gradient(135deg, var(--accent-hi), var(--accent));
+  box-shadow: 0 2px 10px rgba(var(--accent-rgb), 0.42);
+}
+/* 播放键：经典黑是深灰圆 + 悬停变红，这里静止就是暖橙实心
+   （它是整条播放条上唯一的实心块，落日那轮的对应物） */
+html[data-skin="sunset"] .pb-play {
+  background: var(--accent);
+  color: #ffffff;
+}
+html[data-skin="sunset"] .pb-play:hover {
+  background: var(--accent-hi);
+  color: #1a1512;
+}
+/* VIP 胶囊：金→红渐变在暖底上会串色，改成平涂橙金 */
+html[data-skin="sunset"] .uh-vip {
+  background: linear-gradient(120deg, var(--accent-hi), var(--accent));
+}
+/* 卡片播放键：投影收成暖橙的一圈光晕，呼应太阳的边缘发光 */
+html[data-skin="sunset"] .card-play {
+  box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.45);
+}
+/* ------------------------------------------------------------
+   4.5 落日落在歌词页（全屏播放）
+   ------------------------------------------------------------
+   全屏播放页在 styles.css 里是一套「深色专用」的硬编码值：冷调近黑的雾面
+   （rgba(14,14,17,.72)）、纯白的歌词、白色半透明的悬停底色。经典黑用它正合适，
+   落日余晖整套暖褐调压上去就露馅了 —— 雾面是偏蓝的黑，歌词是冷白，
+   整页看上去像「经典黑上刷了一层橙」，而不是同一个色系。
+   这一节把这页的每一处冷色换成暖色系，并让歌词当前行带上落日的橙光。
+   ------------------------------------------------------------ */
+
+/* 地平线：全屏页顶边原本还单独压过一条 3px 暖橙渐变带（因为那时标题栏被播放页
+   整页盖住，不补一条就认不出皮肤）。m02003 第③点改成标题栏浮在播放页之上以后，
+   标题栏自己的「地平线」（见 4.2 节，就贴在标题栏底边）已经露在外面，这一条
+   完全被压在标题栏下面、永远看不见，属于死代码，删掉。 */
+
+/* 背景层：经典黑是 saturate(1.5) brightness(.5) —— 一条中性灰的压暗。
+   sepia(0.25) 把封面的平均色往琥珀推，整层的脸色跟着变暖，再配上暖雾面，
+   全屏页就是「黄昏的窗」而不是「深夜的窗」。 */
+html[data-skin="sunset"] .np-bg {
+  filter: blur(64px) saturate(1.25) brightness(0.42) sepia(0.25);
+}
+
+/* 雾面：经典黑写死 rgba(14,14,17,.72)，那是偏蓝的黑。改成从 --bg-0 调暖褐黑。
+   透明度比经典黑的 .72 提到 .84，有两个原因：
+   ① 落日余晖的 --bg-0(#121010) 本身比经典黑(#0e0e11)亮一点点，同透明度会糊；
+   ② 算过对比度 —— 同样压在模糊封面上，.84 这一档在三档封面亮度下都比经典黑
+      的 .72 更好，不是拿可读性换色调。 */
+html[data-skin="sunset"] .np-scrim {
+  background: color-mix(in srgb, var(--bg-0) 84%, transparent);
+}
+
+/* 关闭键：白色半透明是中性色，换成一层暖橙薄雾 */
+html[data-skin="sunset"] .np-close {
+  background: rgba(var(--accent-rgb), 0.18);
+  color: var(--text-1);
+}
+html[data-skin="sunset"] .np-close:hover {
+  background: rgba(var(--accent-rgb), 0.34);
+  color: var(--text-0);
+}
+
+/* 封面：经典黑靠一层 60px 的纯黑重投影「浮」在页面上，落日余晖是暖色的，
+   重投影保留（深底上还是要体积），再叠一层橙色外发光 —— 像落日压在地平线上
+   那圈晕。描边沿用细橙线，让封面边缘在深底上收得干净。 */
+html[data-skin="sunset"] .np-cover {
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.62), 0 0 46px rgba(var(--accent-rgb), 0.3);
+  outline: 1px solid rgba(var(--accent-rgb), 0.35);
+  outline-offset: -1px;
+}
+/* 封面还没加载出来时的兜底层：不发光，免得深底上多出一块亮的方块 */
+html[data-skin="sunset"] .np-cover-fallback {
+  background: var(--bg-3);
+}
+
+/* 页签：经典黑用白色半透明（.06 悬停 / .12 选中）。深底上「白色半透明」等于
+   「提亮成灰」，和暖底不是一套。这里换成橙色半透明 —— 提亮的同时把色相带过去。 */
+html[data-skin="sunset"] .np-tab:hover {
+  background: rgba(var(--accent-rgb), 0.16);
+}
+html[data-skin="sunset"] .np-tab.active {
+  background: rgba(var(--accent-rgb), 0.26);
+  color: var(--accent-hi);
+}
+/* 选中的页签下划线常驻（和瑞士风同一套语言：下划线是这个皮肤标记「就是它」
+   的方式）。少了这一条，落日余晖下选中的页签只有一块橙底、没有线，
+   和悬停态区分不开。 */
+html[data-skin="sunset"] .np-tab.active::after {
+  transform: scaleX(1);
+}
+
+/* ---- 歌词 ----
+   经典黑是纯白的四档透明度，白里带蓝，压在这套暖褐底上会发青。
+   这里换成 --text-0(#f2e9df) 的暖白四档，透明度整体比经典黑抬一档 ——
+   算过：经典黑 0.42 在中等/明亮封面上只有 3.80 / 3.07，本来就不够 AA；
+   暖白 0.50 在同样的底上是 4.42 / 3.97，是往上走的。 */
+html[data-skin="sunset"] .lyric-line {
+  color: rgba(242, 233, 223, 0.5);
+}
+html[data-skin="sunset"] .lyric-line:hover {
+  color: rgba(242, 233, 223, 0.76);
+}
+/* 当前行：暖白纯色，发光从「白色冷光」改成「落日的橙光」——
+   这是整个皮肤最贴题的一处：唱到的那一句像被夕阳照亮。 */
+html[data-skin="sunset"] .lyric-line.active {
+  color: var(--text-0);
+  text-shadow: 0 0 22px rgba(var(--accent-rgb), 0.55);
+}
+html[data-skin="sunset"] .lyric-trans {
+  color: rgba(242, 233, 223, 0.52);
+}
+html[data-skin="sunset"] .lyric-line.active .lyric-trans {
+  color: rgba(242, 233, 223, 0.82);
+}
+
+/* ---- 暖化「链接蓝」 ----
+   styles.css 里这几处是写死的冷蓝 #6ea8e8（深色画布上的链接色），
+   经典黑用它没问题，但落日余晖是一整套暖褐调，评论昵称/歌单创建者/
+   .link/MV 标签会变成页面上仅剩的几处蓝，一眼就看出没适配。
+   换成 --accent-hi(#ef8a5c)：对四级底色的对比度 7.64/7.17/6.63/5.98，
+   与原来的 7.61/7.14/6.61/5.96 几乎完全一致，是纯粹的换色不是降可读性。
+   hover 用 --text-0 的暖白：原版 hover 是 #9cc9f5（提亮的蓝），
+   暖色这边提亮到暖白，同样比静息态更亮更显眼。 */
+html[data-skin="sunset"] .pl-creator .pl-cname,
+html[data-skin="sunset"] .cm-user,
+html[data-skin="sunset"] .cm-reply b,
+html[data-skin="sunset"] .link,
+html[data-skin="sunset"] .tl-tag.mv {
+  color: var(--accent-hi);
+}
+html[data-skin="sunset"] .cm-user[data-uid]:hover {
+  color: var(--text-0);
+}
+/* 评论回复气泡的底是 rgba(255,255,255,.045) —— 中性白，压在暖褐底上会发灰。
+   换成暖白的低透明度，色相跟着底色走。 */
+html[data-skin="sunset"] .cm-reply {
+  background: rgba(242, 233, 223, 0.05);
+}
+
+/* 滚动条滑块：styles.css 里是写死的 rgba(255,255,255,.11) —— 中性白。
+   压在暖褐底上会显出一层灰，和整页的暖调不是一套。换成暖白的低透明度，
+   并保留 content-box 裁剪（滑块本体靠 border 让出内边距，改背景时不能丢）。 */
+html[data-skin="sunset"] *::-webkit-scrollbar-thumb {
+  background: rgba(242, 233, 223, 0.16);
+  background-clip: content-box;
+}
+html[data-skin="sunset"] *::-webkit-scrollbar-thumb:hover {
+  background: rgba(242, 233, 223, 0.28);
+  background-clip: content-box;
+}
+/* 播放条上的进度底槽与音量底槽：同样是写死的 rgba(255,255,255,.1)，
+   它们横贯整条播放条，冷灰最显眼，换成暖白。 */
+html[data-skin="sunset"] .pb-track-bg,
+html[data-skin="sunset"] .pb-vol-bg {
+  background: rgba(242, 233, 223, 0.12);
+}
+
+/* ============================================================
+   五、街机风
+
+   参考图是 neubrutalism（新粗野主义）那一路：奶油底 + 白卡片 +
+   2px 纯黑描边 + 无模糊的硬投影，配色只用糖果色的薄荷 / 天蓝 / 黄。
+   从参考图上量出来的三件事决定了下面几乎所有写法：
+
+   1. 描边是 2px 实黑，不是 1px 的灰线。styles.css 有全局的
+      * { box-sizing: border-box }，所以加 border 只吃内边距、不改
+      外框尺寸 —— 这是四款皮肤里唯一一款敢往几十个元素上直接加
+      border 的。仍然有三个地方不能碰：
+        · .qr-wrap：200px 定尺 + 10px 内边距 + 180px 画布，补 1px
+          边框就会把画布挤出 2px（现代白那节已经踩过）。它和
+          .verify-qr img 改用 outline，outline 不参与盒模型。
+        · .titlebar / .playerbar：52px / 74px 定高，补边框会把垂直
+          居中的那一行挤歪，改用「背景色带贴在边框位置」的老办法。
+        · .pb-badge / .pb-queue-count：绝对定位 + height/line-height
+          绑死在 15px / 14px 上，补 2px 边框后 9.5px 的字在 11px 的
+          内容区里会偏上。这两个用 box-shadow: 0 0 0 2px var(--ink)
+          画环，环画在盒子外面，盒模型和基线都不动。
+      （曾经想过给标题栏那一排小圆按钮也改用环，是错的：环画在盒子
+      外面，.tb-right 的 gap:2px 会被两个相邻的环视觉上挤成 0。）
+   2. 投影是 4px 偏移的纯色块，没有模糊半径 —— 所以本节里不出现
+      任何 rgba(0,0,0,.x) 的软阴影，一律 box-shadow: Npx Npx 0 墨黑。
+   3. 圆角全部归零，连 --radius / --radius-lg 都设成 0，这样走变量的
+      那批元素不用逐个列出来。
+
+   强调色取参考图里面积最大的黄 #f6d467。它比任何一款皮肤的强调色
+   都亮，白字压上去只有 1.3:1，所以本皮肤里所有「强调色填充」的文字
+   一律改成墨黑 #111111，而不是沿用 styles.css 的 color:#fff（见 5.2）。
+   同理 --accent-hi 取墨黑、而不是「深一档的黄」：styles.css 把它用在
+   两个地方 —— 「需要当文字用的一档」（链接、选中态标题）和「hover
+   填充」—— 墨黑在这两种用法下都成立，黄色则两处都不能用。
+   反过来说，styles.css 里凡是「黄底上画黄图标 / 黄字」的地方
+   （选中态 svg、.tl-like.on、.cm-like.on、.tl-eq i …）在本皮肤里
+   都等于隐形，必须逐个改回墨黑 —— 这些散落在 5.2 / 5.4 / 5.6 里。
+   ============================================================ */
+
+/* ---------------------------- 5.0 变量 ---------------------------- */
+html[data-skin="arcade"] {
+  /* 本皮肤自己的墨色。描边、硬投影、糖果块上的文字都用它，
+     单独起个名字是因为它出现的次数比任何一个语义变量都多。 */
+  --ink: #111111;
+
+  --accent: #f6d467;                 /* 参考图里 12.3% 面积的黄 */
+  --accent-soft: rgba(246, 212, 103, 0.42);
+  --accent-hi: #111111;              /* 「当文字用」+ hover 填充，两处都要墨黑 */
+  --accent-rgb: 246, 212, 103;
+
+  --bg-0: #f7f8f3;                   /* 参考图页面底（17.1% 面积） */
+  --bg-1: #ffffff;
+  --bg-2: #ffffff;
+  --bg-3: #e6e7de;
+  --bg-4: #dadcd0;
+  --bg-hover: rgba(17, 17, 17, 0.06);
+  --bg-active: rgba(17, 17, 17, 0.1);
+
+  --text-0: #111111;                 /* 17.8:1 @ bg-0 */
+  --text-1: #2b2b2b;                 /* 13.3:1 */
+  --text-2: #444444;                 /*  9.1:1 */
+  --text-3: #565656;                 /*  6.9:1 @ bg-0，5.9:1 @ bg-3，5.3:1 @ bg-4 */
+
+  --line: rgba(17, 17, 17, 0.14);
+  --line-2: rgba(17, 17, 17, 0.28);
+
+  --radius: 0px;
+  --radius-lg: 0px;
+
+  --shadow: 4px 4px 0 #111111;
+}
+
+/* ------------------- 5.1 骨架：直角 + 2px 黑描边 -------------------
+   先做减法（圆角归零），再做加法（描边）。顺序反过来的话，后写的
+   border-radius 会被这里的 0 覆盖掉，改起来要两头找。 */
+
+html[data-skin="arcade"] :is(
+  .tb-logo, .tb-nav, .tb-search, .tb-search-clear, .tb-close,
+  .side-add, .side-pl-cover, .side-badge,
+  .user-chip, .uc-avatar img, .uc-vip,
+  .login-btn, .login-tabs, .login-tab,
+  .card-cover, .card-play, .card-count,
+  .pl-cover, .pl-tag, .pl-creator img, .btn-play-all, .btn-outline,
+  .tl-row, .tl-cover, .tl-tag, .tl-act, .tl-like,
+  .tl-check, .tl-selbar,  .uh-avatar img, .uh-vip, .uh-vip-tag, .uh-stat,
+  .ucard, .ucard-avatar img, .ucard-vip, .ucard-mutual,
+  .lv-row, .lv-bar, .lv-bar-fill,
+  .daily-head, .artist-avatar, .ad-tag, .search-tab,
+  .pb-cover, .pb-btn, .pb-play, .pb-mode, .pb-badge, .pb-queue-count,
+  .pb-like, .pb-comment,
+  .pb-track-bg, .pb-track-fill, .pb-vol-bg, .pb-vol-fill,
+  .pb-track-knob, .pb-vol-knob,
+  .qp-item, .qp-del, .qp-dl-bar, .qp-dl-bar i, .qp-dl-vip, .qp-dl-state,
+  .np-close, .np-cover, .np-cover-fallback, .np-tab,
+  .cm-avatar, .cm-vip, .cm-reply, .cm-loadmore, .cm-like,
+  .modal, .modal-x, .cc-select, .text-input, .text-area, .qr-wrap, .qr-mask,
+  .qr-mask-inner button,
+  .btn-primary, .btn-side, .btn-ghost, .hint code,
+  .add-item, .add-item img, .ai-check, .add-new,
+  .ctx-menu, .ctx-item, .toast,
+  .skin-menu, .skin-item, .skin-swatch,
+  .settings-modal, .set-tab, .set-side-item, .set-select, .set-num,
+  .set-path code, .set-range, .set-about code, .set-switch,
+  .tl-eq i
+) {
+  border-radius: 0;
+}
+/* ⚠️ 伪元素不能写进 :is()（:is() 的宽松选择器列表会把 ::after 整条丢掉，
+   于是圆角静默地留在 50%）。开关的圆钮只能单独列一条。 */
+html[data-skin="arcade"] .set-switch::after {
+  border-radius: 0;
+}
+/* 滚动条滑块本来是 5px 圆头，靠 2px 透明边框让出内缩量。圆角归零后
+   仍然保留 background-clip，否则滑块会铺满整个 9px 轨道槽。 */
+html[data-skin="arcade"] *::-webkit-scrollbar-thumb {
+  border-radius: 0;
+  background-clip: content-box;
+}
+
+/* 描边 A 组：矩形大块面与控件，本身就有内边距，直接上 border。
+   （.qr-wrap 故意不在里面，理由见文件头。） */
+html[data-skin="arcade"] :is(
+  .tb-search,
+  .user-head, .ucard, .daily-head, .ad-tag, .lv-row,
+  .card-cover, .pl-cover, .tl-cover, .pb-cover,
+  .cm-avatar, .artist-avatar, .ucard-avatar img,
+  .qp-item, .cm-reply, .cm-loadmore, .add-item, .add-item img,
+  .np-cover, .np-cover-fallback,
+  .modal, .settings-modal, .skin-menu, .ctx-menu, .toast,
+  .login-tabs, .login-btn,
+  .btn-play-all, .btn-outline, .btn-primary, .btn-side, .btn-ghost,
+  .pb-mode, .np-tab, .search-tab, .set-tab, .set-side-item,
+  .skin-item, .skin-swatch,
+  .text-input, .text-area, .cc-select, .set-select, .set-num,
+  .set-path code, .set-switch, .pl-tag, .uh-vip, .uh-vip-tag, .uh-stat
+) {
+  border: 2px solid var(--ink);
+}
+
+/* .uh-avatar img 本来就有 3px 的白边（把头像从背景上"切"出来），
+   这里只换颜色，不动粗细。 */
+html[data-skin="arcade"] .uh-avatar img {
+  border: 3px solid var(--ink);
+}
+
+/* 描边 B 组：小圆点 / 小方块 / 徽章。因为全局是 box-sizing: border-box，
+   border 画在盒子内侧，外框尺寸一点不变 —— 所以这一组也能直接上 border，
+   一排按钮的间距不会被吃掉。（环（box-shadow: 0 0 0 2px）是画在盒子
+   外面的，视觉上会把 4px 的间距挤成 0，只在下面那两个绝对定位的计数
+   徽章上用，因为它们的 line-height 和高度是绑死的。） */
+html[data-skin="arcade"] :is(
+  .tb-logo, .tb-nav, .tb-close,
+  .pb-btn, .pb-like, .pb-comment, .qp-del, .tl-act, .tl-like,
+  .side-add, .side-pl-cover,
+  .modal-x, .np-close, .ai-check, .uc-vip, .side-badge, .tl-tag, .cm-vip,
+  .pl-creator img
+) {
+  border: 2px solid var(--ink);
+}
+html[data-skin="arcade"] :is(.uc-vip, .side-badge, .tl-tag, .cm-vip) {
+  border-width: 1.5px;
+}
+/* 这两个是 position:absolute + height/line-height 绑死的计数徽章，
+   补 border 会让 9.5px 的字在 11px 的内容区里偏上，改用环。 */
+html[data-skin="arcade"] :is(.pb-badge, .pb-queue-count) {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+/* .card-play / .pb-play 是圆形的主动作按钮，硬投影比环更有分量感。 */
+html[data-skin="arcade"] :is(.card-play, .pb-play) {
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+/* .titlebar / .playerbar 定高，用背景色带占住边框位置（同瑞士风）。
+   3px 比其余地方的 2px 粗一档，是因为这两条横贯整屏，2px 在 1440 宽
+   上会被读成一根头发丝。 */
+html[data-skin="arcade"] .titlebar {
+  background-color: var(--bg-1);
+  background-image: linear-gradient(var(--ink), var(--ink));
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: left bottom;
+  background-size: 100% 3px;
+  border-bottom-color: transparent;
+}
+html[data-skin="arcade"] .playerbar {
+  background-color: var(--bg-1);
+  background-image: linear-gradient(var(--ink), var(--ink));
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: left top;
+  background-size: 100% 3px;
+  border-top-color: transparent;
+}
+html[data-skin="arcade"] .sidebar {
+  border-right: 2px solid var(--ink);
+}
+/* 播放队列面板贴着窗口右边，原来就把 border-right 去掉了（面板和
+   窗口右缘齐平，多一条线反而像没贴住）。这里单独写，别让它被上面
+   那组 border 简写重新补回右边。 */
+html[data-skin="arcade"] .queue-panel {
+  border: 2px solid var(--ink);
+  border-right: none;
+  box-shadow: -4px 4px 0 var(--ink);
+}
+
+/* 选中态一律「黄底 + 左侧一道黑杠」，不整块提亮。行高都是固定的
+   （.side-item 34px、.qp-item、.tl-row 44px），用 inset 阴影画杠不会
+   参与盒模型，比加 border-left 安全。 */
+html[data-skin="arcade"] .side-item.active,
+html[data-skin="arcade"] .qp-item.playing,
+html[data-skin="arcade"] .tl-row.playing {
+  background: var(--accent-soft);
+  box-shadow: inset 4px 0 0 var(--ink);
+}
+html[data-skin="arcade"] .side-item.active {
+  color: var(--ink);
+  font-weight: 700;
+}
+/* 选中行的图标原先是 --accent（黄），落在黄底上等于隐形 */
+html[data-skin="arcade"] .side-item.active svg {
+  color: var(--ink);
+}
+html[data-skin="arcade"] .qp-item.playing .qp-name,
+html[data-skin="arcade"] .tl-row.playing .tl-name,
+html[data-skin="arcade"] .tl-row.playing .tl-idx {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* 行与行之间的分隔线：styles.css 里 .tl-row 用 inset 阴影、.cm-item 用
+   border-bottom，这里统一压成一条 1px 的黑发丝，把整张表读成格子。 */
+html[data-skin="arcade"] .tl-row + .tl-row {
+  box-shadow: inset 0 1px 0 rgba(17, 17, 17, 0.14);
+}
+/* 正在播放那一行要同时有左边那道杠和上边这条分隔线（后写的这条
+   覆盖上面两条，把两个 inset 合并成一条声明）。 */
+html[data-skin="arcade"] .tl-row.playing {
+  box-shadow: inset 4px 0 0 var(--ink), inset 0 1px 0 rgba(17, 17, 17, 0.14);
+}
+html[data-skin="arcade"] .cm-item {
+  border-bottom-color: rgba(17, 17, 17, 0.14);
+}
+html[data-skin="arcade"] .search-tabs {
+  border-bottom: 2px solid var(--ink);
+}
+/* 选中页签自己的底边留透明：背景默认画到 border-box，所以黄色会一直
+   铺到下面那条黑线，读成「页签坐在这条线上」而不是「双下巴」。 */
+html[data-skin="arcade"] .search-tab.active {
+  border-bottom-color: transparent;
+}
+
+/* ------------------- 5.2 强调色填充上的文字改墨黑 -------------------
+   styles.css 有 17 处写死 background:var(--accent); color:#fff。
+   黄底白字只有 1.3:1，是这套配色里唯一会「看不见」的组合。
+   下面这条是兜底：凡是「背景走 var(--accent)」的元素，文字一律墨黑。
+   具体的 hover 反相（黑底黄字）和徽章反相在 5.4 / 5.6 里单独写。
+
+   注意这里不能把 .side-badge / .pb-badge / .pb-queue-count 列进来：
+   :is() 的特指度取参数里最高的那个（这条里是 .skin-item.on .skin-tick，
+   0,3,0），整条算下来是 0,4,1；而 5.6 里给徽章反相的那条只有 0,2,1，
+   压不过它 —— 结果就是「黑底 + 黑字」。徽章由 5.6 独家负责。 */
+html[data-skin="arcade"] :is(
+  .uc-vip, .uh-vip, .card-play, .card-count, .pl-tag,
+  .btn-play-all, .btn-primary, .lv-bar-fill, .pb-play,
+  .qr-mask-inner button, .side-item.active svg,
+  .set-tab.on svg, .skin-item.on .skin-tick,
+  .tl-like.on, .tl-act.on, .cm-like.on, .uc-out:hover, .qp-clear:hover,
+  .pb-like.on, .pb-vol:hover .pb-vol-fill,
+  .login-btn:hover, .btn-outline.on, .set-switch.on
+) {
+  color: var(--ink);
+}
+/* 上一条只能覆盖 color，图标是 fill="currentColor" 的 svg，跟着变色；
+   但这几个是「背景就是黄」的实心块，底色另说。 */
+html[data-skin="arcade"] .pb-track-fill,
+html[data-skin="arcade"] .lv-bar-fill,
+/* 下载进度条和黄底同病：黄色填充画在白面板上几乎看不见，走墨黑 */
+html[data-skin="arcade"] .qp-dl-bar i,
+html[data-skin="arcade"] .tl-eq i,
+html[data-skin="arcade"] .pb-vol:hover .pb-vol-fill {
+  background: var(--ink);
+}
+html[data-skin="arcade"] .pb-vol-fill {
+  background: var(--text-1);
+}
+/* hover 填充走 --accent-hi（墨黑），文字必须反过来用黄，否则黑底黑字。 */
+html[data-skin="arcade"] :is(
+  .btn-play-all, .btn-primary, .login-btn, .pb-play, .btn-outline.on
+):hover {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--accent);
+}
+html[data-skin="arcade"] .card-play:hover {
+  background: var(--ink);
+  color: var(--accent);
+}
+/* 徽章反过来：黑底 + 黄字，在白色侧栏上比黄底黑字更抓眼，也更像
+   街机上的分数牌。 */
+html[data-skin="arcade"] :is(.side-badge, .pb-badge, .pb-queue-count) {
+  background: var(--ink);
+  color: var(--accent);
+}
+/* 进度 / 音量旋钮：方形 + 黄底黑边，与墨黑的填充条拉开 */
+html[data-skin="arcade"] :is(.pb-track-knob, .pb-vol-knob) {
+  background: var(--accent);
+  border: 2px solid var(--ink);
+  box-shadow: none;
+}
+/* 报错文案必须留在红色系：浅色皮的 --accent-hi 是墨黑，沿用会把
+   「登录失败」渲染成一句普通黑字，语义丢失。 */
+html[data-skin="arcade"] :is(.login-err, .ask-err) {
+  color: #b3261e;
+}
+html[data-skin="arcade"] .toast.err {
+  background: #fdeceb;
+  border-color: #b3261e;
+  color: #8c1f1f;
+}
+html[data-skin="arcade"] .toast.ok {
+  background: #e8f7ee;
+  border-color: #1c6b3c;
+  color: #14512d;
+}
+/* 三个语义色角标（SQ / MV / VIP）与评论区的金色 VIP：写死的颜色在
+   白底上只有 2.9~3.5:1，本皮肤整体加粗加重，必须一起压深。 */
+html[data-skin="arcade"] .tl-tag.sq,
+html[data-skin="arcade"] .cm-vip {
+  color: #7a5410;
+}
+html[data-skin="arcade"] .tl-tag.mv {
+  color: #1f4fa8;
+}
+html[data-skin="arcade"] .tl-tag.vip {
+  color: #b3261e;
+}
+/* 链接蓝换成墨黑（同落日余晖那节的理由：这是写死在 styles.css 里的
+   品牌色，浅色皮不覆盖就会在奶油底上留一块冷色）。 */
+html[data-skin="arcade"] :is(.cm-user, .cm-reply b, .link, .pl-creator .pl-cname) {
+  color: var(--ink);
+  font-weight: 600;
+}
+html[data-skin="arcade"] .cm-user[data-uid]:hover {
+  color: var(--ink);
+  background: var(--accent);
+  text-decoration: none;
+}
+
+/* ---------------------------- 5.3 硬投影 ----------------------------
+   4px 偏移、0 模糊、纯墨色。参考图上量到的就是「2px 描边 + 4px 阴影」
+   叠出来的 6px 黑边，所以阴影偏移固定 4px，不随元素大小变。 */
+html[data-skin="arcade"] :is(
+  .user-head, .card-cover, .pl-cover, .daily-head, .ucard, .lv-row,
+  .modal, .settings-modal, .ctx-menu, .toast, .skin-menu,
+  .login-btn, .btn-play-all, .btn-outline, .btn-primary, .btn-side,
+  .np-cover, .np-cover-fallback, .text-input, .text-area,
+  .cc-select, .set-select, .set-num, .set-path code
+) {
+  box-shadow: 4px 4px 0 var(--ink);
+}
+html[data-skin="arcade"] .uh-avatar img {
+  box-shadow: 4px 4px 0 var(--ink);
+}
+/* 输入框获得焦点时把投影"顶"出来一档，替代默认的蓝色描边 */
+html[data-skin="arcade"] :is(.text-input, .text-area, .cc-select, .set-select, .set-num):focus,
+html[data-skin="arcade"] .tb-search:focus-within {
+  border-color: var(--ink);
+  box-shadow: 6px 6px 0 var(--ink);
+}
+/* 按压：整体挪 2px、投影缩到 0。transform 不参与布局，网格里相邻
+   卡片不会因此重新排布。 */
+html[data-skin="arcade"] :is(
+  .card-play, .pb-play, .side-add, .ai-check, .tl-act,
+  .btn-play-all, .btn-outline, .btn-primary, .btn-side, .login-btn, .np-close
+) {
+  transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease),
+    background-color 0.12s var(--ease), color 0.12s var(--ease);
+}
+html[data-skin="arcade"] :is(
+  .card-play, .pb-play, .side-add, .ai-check, .tl-act,
+  .btn-play-all, .btn-outline, .btn-primary, .btn-side, .login-btn, .np-close
+):active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ink);
+}
+/* 大块面 hover 时抬起来一点：位移小一档，避免网格边缘被裁掉。 */
+html[data-skin="arcade"] :is(.card-cover, .ucard, .lv-row) {
+  transition: transform 0.14s var(--ease), box-shadow 0.14s var(--ease);
+}
+html[data-skin="arcade"] :is(.card-cover, .ucard, .lv-row):hover {
+  box-shadow: 6px 6px 0 var(--ink);
+  transform: translate(-2px, -2px);
+}
+
+/* 列表行 hover 只换底色，不做位移 —— 一张歌单动辄上百行，位移会让
+   整列在鼠标划过时抖成一片。 */
+html[data-skin="arcade"] :is(.tl-row, .qp-item, .side-item):hover {
+  background: var(--bg-hover);
+}
+html[data-skin="arcade"] :is(
+  .ctx-item, .set-side-item, .set-tab, .skin-item, .np-tab, .search-tab
+):hover {
+  background: var(--bg-hover);
+  color: var(--text-0);
+}
+
+/* ------------------- 5.4 选中态：黄底 + 墨字 ------------------- */
+html[data-skin="arcade"] :is(
+  .skin-item.on, .set-tab.on, .set-side-item.on,
+  .np-tab.active, .login-tab.active
+) {
+  background: var(--accent);
+  color: var(--ink);
+  border-color: var(--ink);
+}
+html[data-skin="arcade"] :is(.skin-item.on, .set-tab.on) .skin-name {
+  color: var(--ink);
+  font-weight: 700;
+}
+html[data-skin="arcade"] .search-tab.active {
+  background: var(--accent);
+  color: var(--ink);
+}
+/* styles.css 给 .search-tab.active::after 画了一根 2px 的强调色下划线，
+   这里已经有 2px 黑描边了，再来一根线会读成双下巴，直接撤掉。 */
+html[data-skin="arcade"] .search-tab.active::after {
+  display: none;
+}
+html[data-skin="arcade"] .set-switch {
+  background: var(--bg-4);
+}
+html[data-skin="arcade"] .set-switch::after {
+  background: var(--ink);
+  border: none;
+  box-shadow: none;
+}
+html[data-skin="arcade"] .set-switch.on {
+  background: var(--accent);
+}
+html[data-skin="arcade"] .set-switch.on::after {
+  background: var(--ink);
+}
+html[data-skin="arcade"] .login-tabs {
+  background: var(--bg-3);
+}
+html[data-skin="arcade"] .ai-check.added,
+html[data-skin="arcade"] .add-item.added .ai-check {
+  background: var(--accent);
+  border-color: var(--ink);
+}
+/* 对勾本身是写死的白线，黄底白勾只有 1.3:1 */
+html[data-skin="arcade"] .add-item.added .ai-check::after {
+  border-left-color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+/* 多选复选框同理：黄底白勾 1.3:1，白底灰框在纸面上也偏淡，统一走墨黑 */
+html[data-skin="arcade"] .tl-row.selected .tl-check {
+  color: var(--ink);
+}
+html[data-skin="arcade"] .tl-check {
+  border-color: var(--ink);
+}
+html[data-skin="arcade"] .set-range {
+  accent-color: var(--ink);
+}
+
+/* ---------------------------- 5.5 糖果色块 ----------------------------
+   参考图上除了黄，还有薄荷 #7ee2b7 与天蓝 #7cdff2 两块大面（各占 9%）。
+   它们只做「面板底色」，不承担文字对比 —— 上面的文字一律墨黑。 */
+html[data-skin="arcade"] .daily-head {
+  background: #7ee2b7;
+  border-color: var(--ink);
+}
+html[data-skin="arcade"] :is(.daily-day, .daily-txt h2, .daily-txt p) {
+  color: var(--ink);
+}
+html[data-skin="arcade"] .daily-txt p {
+  opacity: 0.72;
+}
+/* 用户页头图：必须画在 ::after 上。views.js 会给 .uh-bg 写 inline 的
+   background-image，inline 只覆盖 background-image、不覆盖
+   background-size，写在元素自己身上会把用户设的真背景图压扁。 */
+html[data-skin="arcade"] .uh-bg {
+  position: relative;
+  background-color: var(--bg-3);
+}
+html[data-skin="arcade"] .uh-bg::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 12px;               /* 含上下各 2px 的黑边，中间留 8px 天蓝 */
+  pointer-events: none;
+  background: #7cdff2;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+html[data-skin="arcade"] .uh-avatar img {
+  border-color: var(--ink);
+  background: var(--bg-3);
+}
+html[data-skin="arcade"] .uh-vip {
+  background: var(--accent);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .uh-vip-tag {
+  background: transparent;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .ucard-vip {
+  background: transparent;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .ucard-mutual {
+  background: var(--bg-3);
+  box-shadow: 0 0 0 1.5px var(--ink);
+}
+/* .uh-stat 的 padding / 负 margin 是成对抵消的（6/12 配 -6/-12），
+   补 2px 边框后要同步把负 margin 放大到 -8/-14，否则这五个数字会
+   相对左边昵称块整体挪 2px、整组还会变宽 20px 把签到按钮挤出去。 */
+html[data-skin="arcade"] .uh-stat {
+  border: 2px solid var(--ink);
+  background: var(--bg-2);
+  padding: 6px 12px;
+  margin: -8px -14px;
+}
+html[data-skin="arcade"] .uh-stat:hover {
+  background: var(--accent);
+}
+html[data-skin="arcade"] .uh-stat b {
+  color: var(--ink);
+}
+/* 不可点的那个（歌单数）不描边，免得五个块看起来都是按钮 */
+html[data-skin="arcade"] .uh-stat.static {
+  border-color: transparent;
+  background: transparent;
+}
+
+/* ---------------------- 5.6 封面 / 图标位 ---------------------- */
+html[data-skin="arcade"] :is(.card-cover, .pl-cover, .tl-cover, .pb-cover, .artist-avatar) {
+  background: var(--bg-3);
+  outline: none;
+}
+html[data-skin="arcade"] .side-pl-cover {
+  background: var(--bg-3);
+  outline: none;
+}
+html[data-skin="arcade"] .pl-creator img {
+  border: 1.5px solid var(--ink);
+}
+/* 封面底部原是一层压暗渐变，好让白字读得出来。这里字改成墨黑，
+   渐变必须跟着翻成提亮，否则黑字压在暗角上反而更糊。 */
+html[data-skin="arcade"] .card-cover::after {
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0) 58%);
+}
+html[data-skin="arcade"] .card-count {
+  color: var(--ink);
+  text-shadow: none;
+  font-weight: 700;
+  padding: 0 4px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 0 0 1.5px var(--ink);
+}
+html[data-skin="arcade"] .card-play {
+  background: var(--accent);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .card:hover .card-name {
+  color: var(--text-0);
+}
+html[data-skin="arcade"] .tb-logo {
+  background: var(--accent);
+  color: var(--ink);
+  /* styles.css:94 给 logo 配了一枚红色的软阴影（rgba(236,65,65,.3)）。
+     本皮肤里没有任何红色，留着会在米色标题栏上糊出一团粉。 */
+  box-shadow: 2px 2px 0 var(--ink);
+}
+html[data-skin="arcade"] .tb-search {
+  background: var(--bg-1);
+}
+html[data-skin="arcade"] .tb-search:focus-within {
+  background: var(--bg-1);
+}
+html[data-skin="arcade"] .login-btn {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+html[data-skin="arcade"] .btn-outline {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+html[data-skin="arcade"] .btn-outline.on {
+  background: var(--accent);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .btn-side {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+html[data-skin="arcade"] .btn-side:hover {
+  background: var(--bg-3);
+}
+/* 顺序有讲究：播放键的 class 是 "pb-btn pb-play"，两条选择器特指度完全
+   相同（都是 html[attr] + 一个 class），所以后写的 .pb-btn 会把 .pb-play
+   的底色盖掉。必须先写 .pb-btn 那一族、再写 .pb-play。 */
+html[data-skin="arcade"] .pb-btn {
+  color: var(--text-1);
+  background: var(--bg-2);
+}
+html[data-skin="arcade"] .pb-btn:hover {
+  background: var(--accent);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .pb-btn.active {
+  color: var(--ink);
+  background: var(--accent);
+}
+html[data-skin="arcade"] .pb-play {
+  background: var(--accent);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .pb-play:hover {
+  background: var(--accent);
+  color: var(--ink);
+}
+html[data-skin="arcade"] .pb-mode {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+html[data-skin="arcade"] .pb-mode:hover {
+  background: var(--accent);
+  color: var(--ink);
+}
+/* 播放条左侧的点赞 / 评论是一对 28px 的圆钮，和上面那排播放控件
+   一样补 2px 边框。它们没有底色，加框后空心圆会更清楚。 */
+html[data-skin="arcade"] :is(.pb-like, .pb-comment) {
+  color: var(--text-2);
+}
+html[data-skin="arcade"] :is(.pb-like, .pb-comment):hover {
+  background: var(--bg-hover);
+  color: var(--text-0);
+}
+/* 这几个「已激活」的小图标：底色换成黄（颜色已由 5.2 的兜底改成墨黑）。 */
+html[data-skin="arcade"] :is(.pb-like.on, .tl-like.on, .tl-act.on) {
+  background: var(--accent);
+}
+
+/* ---------------------- 5.7 全屏播放页 ----------------------
+   现代白那节的写法整体成立（浅底 + 提亮封面），只是把 scrim 从
+   92% 提到 94%：本皮肤的歌词非当前行用的是 62% 的墨黑，比现代白的
+   58% 深一档，底子要更实一点才稳。 */
+html[data-skin="arcade"] .np-bg {
+  filter: blur(64px) saturate(0.9) brightness(1.3);
+}
+html[data-skin="arcade"] .np-scrim {
+  background: color-mix(in srgb, var(--bg-0) 94%, transparent);
+}
+html[data-skin="arcade"] .np-close {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+html[data-skin="arcade"] .np-close:hover {
+  background: var(--accent);
+  color: var(--ink);
+}
+html[data-skin="arcade"] :is(.np-cover, .np-cover-fallback) {
+  background: var(--bg-3);
+}
+html[data-skin="arcade"] .np-tab {
+  background: transparent;
+  color: var(--text-2);
+}
+html[data-skin="arcade"] .np-tab span {
+  color: inherit;
+  opacity: 0.7;
+}
+html[data-skin="arcade"] .np-tab.active span {
+  opacity: 1;
+}
+html[data-skin="arcade"] .lyric-line {
+  color: rgba(17, 17, 17, 0.62);   /* 5.2:1 @ bg-0，过 AA */
+}
+html[data-skin="arcade"] .lyric-line:hover {
+  color: rgba(17, 17, 17, 0.78);
+}
+html[data-skin="arcade"] .lyric-line.active {
+  color: var(--ink);
+  text-shadow: none;
+}
+html[data-skin="arcade"] .lyric-trans {
+  color: rgba(17, 17, 17, 0.62);
+}
+html[data-skin="arcade"] .lyric-line.active .lyric-trans {
+  color: rgba(17, 17, 17, 0.8);
+}
+html[data-skin="arcade"] .cm-reply {
+  background: var(--bg-3);
+}
+html[data-skin="arcade"] .cm-loadmore {
+  background: var(--bg-2);
+}
+html[data-skin="arcade"] .cm-loadmore:hover {
+  background: var(--accent);
+  color: var(--ink);
+}
+/* 弹窗遮罩：本皮肤整体是亮色，纯黑 62% 压下来太重，收到 42% */
+html[data-skin="arcade"] .modal-mask {
+  background: rgba(17, 17, 17, 0.42);
+}
+/* 二维码区域一律用 outline 不用 border：.qr-wrap 是 200px 定尺 +
+   10px 内边距 + 180px 画布，.verify-qr img 是 180px 定尺的像素图，
+   补 border 会把内容挤小、二维码缩放后发糊。 */
+html[data-skin="arcade"] .qr-wrap {
+  border-radius: 0;
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+html[data-skin="arcade"] .verify-qr img {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* ------------------- 5.8 滚动条 / 进度底槽 ------------------- */
+html[data-skin="arcade"] *::-webkit-scrollbar-thumb {
+  background: rgba(17, 17, 17, 0.22);
+  background-clip: content-box;   /* 滑块靠 border 让出内边距，改背景不能丢 */
+}
+html[data-skin="arcade"] *::-webkit-scrollbar-thumb:hover {
+  background: rgba(17, 17, 17, 0.38);
+  background-clip: content-box;
+}
+html[data-skin="arcade"] :is(.pb-track-bg, .pb-vol-bg) {
+  background: rgba(17, 17, 17, 0.14);
+}
+html[data-skin="arcade"] .lv-bar {
+  background: var(--bg-3);
+  overflow: hidden;
+}
+html[data-skin="arcade"] .lv-bar-fill {
+  background: var(--ink);
+}
+
+/* ---------------------------- 5.9 显示字体 ----------------------------
+   参考图上最抓眼的其实是字：粗、方、字面宽。本机装了 Bahnschrift
+   （DIN 一脉的窄体粗黑），拉丁字母走它、中文回落到 Noto Sans SC。
+   只用在标题这类短字符串上 —— 正文换字体会让每行的断行位置全变，
+   滚动高度跟着动。 */
+html[data-skin="arcade"] :is(
+  .page-title, .section-title, .pl-name, .np-title,
+  .daily-txt h2, .uh-name, .artist-meta h1, .modal h2
+) {
+  font-family: Bahnschrift, "Century Gothic", "Franklin Gothic Medium",
+    "Noto Sans SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+/* ---------------------------- 5.10 减少动效 ----------------------------
+   本节新增了位移 + 硬投影的按压效果，所以单独补一条；上面「二、减少
+   动效」那节的两组选择器都是给下划线动效用的，本皮肤没有下划线，
+   不需要往那两个 :is() 里加 arcade。 */
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="arcade"] :is(
+    .card-play, .pb-play, .side-add, .ai-check, .tl-act,
+    .btn-play-all, .btn-outline, .btn-primary, .btn-side, .login-btn, .np-close,
+    .card-cover, .ucard, .lv-row
+  ) {
+    transition: none;
+  }
+  html[data-skin="arcade"] :is(
+    .card-play, .pb-play, .side-add, .ai-check, .tl-act,
+    .btn-play-all, .btn-outline, .btn-primary, .btn-side, .login-btn, .np-close
+  ):active {
+    transform: none;
+  }
+  html[data-skin="arcade"] :is(.card-cover, .ucard, .lv-row):hover {
+    transform: none;
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+}
+
+/* ============================ ɨ描进度浮层（m00001 第②点） ============================
+   桌面端新增的一块 UI，五款皮肤各自只需要补「形状」这一层：颜色全部走
+   styles.css 里那套 --bg-* / --text-* / --accent，会自动跟着皮肤变。 */
+
+/* 现代白 / 瑞士风：白底皮上遮罩要更淡，否则整页像被关灯 */
+html:is([data-skin="light"], [data-skin="swiss"]) .scan-mask {
+  background: rgba(17, 17, 17, 0.18);
+}
+html:is([data-skin="light"], [data-skin="swiss"]) .scan-card {
+  box-shadow: 0 18px 48px rgba(17, 17, 17, 0.16);
+}
+/* 瑞士风：直角 + 左侧红线，与它自己的 .daily-head 同一套语法 */
+html[data-skin="swiss"] .scan-card {
+  border-radius: 0;
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+html[data-skin="swiss"] .scan-bar,
+html[data-skin="swiss"] .scan-bar i {
+  border-radius: 0;
+}
+/* 街机风：2px 墨黑描边 + 4px 硬投影 + 直角；进度条也是黑框黄底 */
+html[data-skin="arcade"] .scan-mask {
+  background: rgba(17, 17, 17, 0.28);
+}
+html[data-skin="arcade"] .scan-card {
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+html[data-skin="arcade"] .scan-bar {
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  height: 10px;
+  background: var(--bg-1);
+}
+html[data-skin="arcade"] .scan-bar i {
+  border-radius: 0;
+  background: var(--accent);
+}
+/* 落日余晖：靠发光说话，卡片带一圈橙色光晕 */
+html[data-skin="sunset"] .scan-card {
+  box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 0 26px rgba(var(--accent-rgb), 0.28);
+}

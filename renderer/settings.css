@@ -1,0 +1,299 @@
+/* ============================================================
+   设置弹窗 / 皮肤菜单 — 骨架样式
+   只负责布局与基本观感，颜色一律走 styles.css 的变量，这样
+   skins.css 里的「现代白」只需要覆盖变量就能整体换肤。
+   ============================================================ */
+
+/* ---------------------------------------------------------- 皮肤菜单 */
+.tb-skin-wrap { position: relative; display: flex; align-items: center; }
+
+.skin-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 160;
+  min-width: 186px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow);
+  transform-origin: top right;
+  animation: skinMenuIn .16s var(--ease);
+}
+@keyframes skinMenuIn {
+  from { opacity: 0; transform: translateY(-6px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+.skin-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: var(--text-1);
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+  transition: background .12s var(--ease), color .12s var(--ease);
+}
+.skin-item:hover { background: var(--bg-hover); color: var(--text-0); }
+.skin-item.on { color: var(--accent-hi); }
+.skin-item .skin-name { flex: 1 1 auto; }
+.skin-item .skin-tick { flex: 0 0 auto; color: var(--accent); opacity: 0; }
+.skin-item.on .skin-tick { opacity: 1; }
+
+/* 皮肤缩略色块：左边是主色，右边是底色，一眼能看出是深是浅 */
+.skin-swatch {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid var(--line-2);
+  background: linear-gradient(105deg, var(--sw-a) 0 46%, var(--sw-b) 46% 100%);
+}
+
+/* ---------------------------------------------------------- 设置弹窗 */
+.settings-modal {
+  width: 660px;
+  max-width: calc(100vw - 60px);
+  height: 460px;
+  max-height: calc(100vh - 90px);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 18px 0;
+}
+.settings-modal h2 { margin-bottom: 12px; flex: 0 0 auto; }
+
+.set-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 14px;
+  padding-bottom: 18px;
+}
+
+/* 左侧页签：每一类一页 */
+.set-tabs {
+  flex: 0 0 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 10px;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+.set-tab {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+  transition: background .12s var(--ease), color .12s var(--ease);
+}
+.set-tab svg { flex: 0 0 auto; }
+.set-tab:hover { background: var(--bg-hover); color: var(--text-0); }
+.set-tab.on { background: var(--accent-soft); color: var(--accent-hi); font-weight: 500; }
+.set-tab.on svg { color: var(--accent); }
+
+.set-panes { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding-right: 4px; }
+
+.set-page { display: flex; flex-direction: column; gap: 2px; }
+.set-page-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: .04em;
+  margin: 2px 0 6px;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 46px;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.set-row:last-child { border-bottom: 0; }
+.set-row .set-text { flex: 1 1 auto; min-width: 0; }
+.set-label { font-size: 13px; color: var(--text-0); }
+.set-desc { font-size: 11.5px; color: var(--text-3); margin-top: 3px; line-height: 1.5; }
+.set-ctl { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+
+/* 开关 */
+.set-switch {
+  position: relative;
+  width: 38px;
+  height: 21px;
+  flex: 0 0 auto;
+  border-radius: 11px;
+  background: var(--bg-4);
+  border: 1px solid var(--line-2);
+  transition: background .16s var(--ease), border-color .16s var(--ease);
+}
+.set-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--text-1);
+  transition: transform .16s var(--ease), background .16s var(--ease);
+}
+.set-switch.on { background: var(--accent); border-color: var(--accent); }
+.set-switch.on::after { transform: translateX(17px); background: #fff; }
+
+.set-select {
+  height: 30px;
+  min-width: 132px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  color: var(--text-0);
+  font-size: 12.5px;
+  outline: none;
+}
+.set-select:focus { border-color: var(--accent); }
+.set-select option { background: var(--bg-3); color: var(--text-0); }
+/* 「启动时打开的页面」选项里有「上次离开时的页面」这种长标签，默认 132px 装不下 */
+.set-select-wide { min-width: 176px; }
+
+/* 缓存目录（第 13 点）：路径可能很长，code 负责省略号，按钮不换行 */
+.set-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 340px;
+}
+.set-path code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;          /* 路径太长时优先保住末尾的目录名 */
+  text-align: left;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  color: var(--text-1);
+  font-size: 11.5px;
+  font-family: ui-monospace, Consolas, 'Courier New', monospace;
+}
+.set-path-btn {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.set-num {
+  width: 62px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  color: var(--text-0);
+  font-size: 12.5px;
+  outline: none;
+}
+.set-num:focus { border-color: var(--accent); }
+
+/* 缓存上限行（第 6 点）：数字 + 单位 + 当前占用，一行放得下 */
+.set-path-num { max-width: none; gap: 6px; }
+.set-path-num .set-num { width: 74px; }
+.set-unit { flex: 0 0 auto; font-size: 12px; color: var(--text-3); }
+.set-size { flex: 0 0 auto; margin-left: 6px; font-size: 11.5px; color: var(--text-3); }
+.set-size b { color: var(--text-1); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* 下载页的文件命名格式输入框（第 5 点） */
+.set-input {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  color: var(--text-0);
+  font-size: 12.5px;
+  outline: none;
+  font-family: inherit;
+  /* 全局 html,body 是 user-select:none（styles.css:48），输入框必须显式恢复，
+     否则部分 Windows/Chromium 组合下点击选不中文本、光标落不进去，
+     表现就是"能删不能加"（m03577 第⑦点）。 */
+  user-select: text;
+  cursor: text;
+}
+.set-input:focus { border-color: var(--accent); }
+.set-input-wide { width: 300px; }
+
+.set-range { width: 150px; accent-color: var(--accent); }
+
+/* 侧边栏个性化：一行一个可拖动排序的条目 */
+.set-side-list { display: flex; flex-direction: column; gap: 2px; }
+.set-side-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  color: var(--text-1);
+  font-size: 13px;
+}
+.set-side-item:hover { background: var(--bg-hover); }
+.set-side-item .set-side-grip { color: var(--text-3); flex: 0 0 auto; cursor: grab; }
+.set-side-item .set-side-name { flex: 1 1 auto; }
+.set-side-item.off .set-side-name { color: var(--text-3); }
+
+.set-about { display: flex; flex-direction: column; gap: 10px; font-size: 12.5px; color: var(--text-2); }
+.set-about b { color: var(--text-0); font-weight: 600; }
+.set-about code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--text-1);
+  background: var(--bg-3);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.set-about .set-link { color: var(--accent-hi); cursor: pointer; }
+.set-about .set-link:hover { text-decoration: underline; }
+
+/* ---------------------------------------------------------- 设置项的实际效果
+   设置页只负责给 <body> 加类名，具体表现全在这里。用类名而不是内联样式，
+   是因为同一项要同时命中好几个地方（列表行、侧栏、底栏角标）。            */
+
+/* 关闭界面动效 */
+body.no-anim *,
+body.no-anim *::before,
+body.no-anim *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* 关闭歌曲列表封面（第 1 点） */
+body.no-list-cover .tl-cover { display: none; }
+
+/* 关闭侧栏歌单封面（第 3 点） */
+body.no-side-cover .side-pl-cover { display: none; }
+body.no-side-cover .side-pl { gap: 0; }
+
+/* 关闭评论数角标 */
+body.no-badge .side-badge,
+body.no-badge #pbCommentCount { display: none !important; }
+
