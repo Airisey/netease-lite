@@ -53,6 +53,8 @@
     { key: 'radio', label: '推荐歌单', icon: 'radio' },
     { key: 'charts', label: '榜单', icon: 'chart' },
     { key: 'podcast', label: '播客', icon: 'podcast' },
+    // 音乐云盘（m05071 第④点）跟着播客走：侧栏里它就在播客下面。
+    { key: 'cloud', label: '音乐云盘', icon: 'download' },
     { key: 'liked', label: '我喜欢的音乐', icon: 'heart' },
     { key: 'recent', label: '最近播放', icon: 'album' },
     // 「正在下载」与「已下载音乐」是一对（m02003 第①点把前者挪到后者上面）：
@@ -353,6 +355,8 @@
 
     act(name) {
       if (name === 'devtools') global.ne.window.control('toggleDevTools');
+      if (name === 'repo') global.ne.openExternal('https://github.com/Airisey/netease-lite');
+      if (name === 'repo-android') global.ne.openExternal('https://github.com/Airisey/netease-lite-android');
       if (name === 'cacheDir') this.pickCacheDir();
       if (name === 'cacheReset') this.resetCacheDir();
       if (name === 'refresh') this.refreshApp();
@@ -614,11 +618,18 @@
     },
 
     page_about() {
+      // 版本号来自 package.json（主进程经 argv 传进来，见 preload 的注释）。
+      // 拿不到时退回 '—'，绝不硬编码——硬编码的结果就是升级后还写着旧版本。
+      const ver = global.ne.appVersion || '—';
+      const repo = global.ne.repo || {};
+      const el = (navigator.userAgent.match(/Electron\/[\d.]+/) || [''])[0].replace('Electron/', '') || '—';
       return `<div class="set-page-title">关于</div>
         <div class="set-about">
           <div><b>网易云音乐 Lite</b> — Windows 第三方轻量客户端</div>
-          <div>版本 <code>1.0.0</code> · Electron <code>${(navigator.userAgent.match(/Electron\/[\d.]+/) || [''])[0].replace('Electron/', '') || '—'}</code></div>
+          <div>版本 <code>${U.esc(ver)}</code> · Electron <code>${U.esc(el)}</code></div>
           <div>快捷键：<code>空格</code> 播放 / 暂停 · <code>← →</code> 快退快进 5 秒 · <code>Ctrl+← →</code> 上一首 / 下一首 · <code>↑ ↓</code> 音量 · <code>L</code> 歌词页 · <code>Q</code> 播放列表 · <code>Ctrl+F</code> 搜索 · <code>F12</code> 开发者工具</div>
+          <div>源码：<span class="set-link" data-act="repo">${U.esc(repo.desktop || 'github.com/Airisey/netease-lite')}</span>（点击用浏览器打开）</div>
+          <div>安卓版：<span class="set-link" data-act="repo-android">${U.esc(repo.android || 'github.com/Airisey/netease-lite-android')}</span></div>
           <div>数据来自网易云音乐公开接口，仅用于学习与个人使用。</div>
           <div><span class="set-link" data-act="devtools">打开开发者工具</span> · <span class="set-link" data-act="reset">恢复默认设置</span></div>
         </div>`;

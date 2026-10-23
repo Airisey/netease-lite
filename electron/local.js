@@ -51,12 +51,18 @@ const MIME = {
  * `A.B`、`A_B` 归一化之后是同一个键，这样命名习惯不同也能对上。
  */
 function norm(s) {
-  return String(s == null ? '' : s)
+  const base = String(s == null ? '' : s)
     .normalize('NFKC')
     .toLowerCase()
-    .replace(/[\s\u3000]+/g, '')
-    // eslint-disable-next-line no-useless-escape
-    .replace(/[._\-–—~～!！?？@#$%^&*()+=\[\]{};:'",<>/\\|`]/g, '');
+    .replace(/[\s\u3000]+/g, '');
+  // eslint-disable-next-line no-useless-escape
+  const stripped = base.replace(/[._\-–—~～!！?？@#$%^&*()+=\[\]{};:'",<>/\\|`]/g, '');
+  // 名字整个由符号组成的歌（`^^`、`*`、`#`）会被上面那条规则剥成空串，而
+  // `score()` 见到空名字就直接判 0 —— 这类歌永远匹配不上（用户 m05071 第①点：
+  // `當山みれい - ^^.mp3` 在安卓端能对上、在电脑端不行，原因就是安卓的归一化
+  // 没把这些符号剥掉）。剥空了就退回「只去空白」的那一版，两边的键仍然一致，
+  // 别的歌的匹配结果不受影响。
+  return stripped || base;
 }
 
 /**

@@ -70,6 +70,39 @@ function readSavedConfig() {
 }
 
 /**
+ * 便携版的 data 目录里除了登录态还有两样「用户自己的东西」：
+ *
+ * - `local-index.json` —— 本地扫描/下载建立的「哪首歌在哪个文件」索引。用户
+ *   m05071 第②点说的「退出后已下载音乐页变空」，实际就是每次更新重打包都把
+ *   它删了：index.html 那页画的就是这张表，表没了页面自然空。
+ * - `download-history.json` —— 下载历史（已下载页的「最近拿到的排前面」排序、
+ *   「这些歌本机已经有」都靠它）。
+ *
+ * 这两个文件不能像 config.json 那样解析后重写（结构由 local.js / download.js
+ * 各自维护，build 不该插一脚），原样复制即可。
+ */
+const SIDECAR_FILES = ['local-index.json', 'download-history.json'];
+
+function readSavedSidecars() {
+  const dirs = [
+    path.join(appDir, 'data'),
+    path.join(projectRoot, 'data'),
+  ];
+  const out = [];
+  for (const name of SIDECAR_FILES) {
+    for (const dir of dirs) {
+      const p = path.join(dir, name);
+      try {
+        if (!fs.existsSync(p)) continue;
+        const raw = fs.readFileSync(p);
+        if (raw.length) { out.push({ name, raw, file: p }); break; }
+      } catch { /* 读不出来就当没有，重建一个空目录也能跑 */ }
+    }
+  }
+  return out;
+}
+
+/**
  * Turn the copied Electron runtime into a single obviously-named executable.
  *
  * Electron has to keep its resources next to a binary called electron.exe, but
@@ -289,6 +322,7 @@ async function main() {
   // rmrf(outDir) below would delete it and silently log the user out on every
   // rebuild, so read it out first and write it back at the end.
   const savedConfig = readSavedConfig();
+  const savedSidecars = readSavedSidecars();
 
   console.log('[build] 清理输出目录 ...');
   rmrf(outDir);
@@ -372,6 +406,18 @@ async function main() {
     console.log(`[build] 保留登录状态 <- ${path.relative(projectRoot, savedConfig.file)} (${nick})`);
   } else {
     console.log('[build] 未找到已保存的登录状态，首次运行需扫码登录');
+  }
+
+  // 本地索引和下载历史原样搬回去：它们在 data 目录里，同样会被上面的 rmrf 删掉。
+  for (const side of savedSidecars) {
+    fs.writeFileSync(path.join(dataDir, side.name), side.raw);
+    let note = '';
+    try {
+      const j = JSON.parse(side.raw.toString('utf8'));
+      const n = j && j.map ? Object.keys(j.map).length : (Array.isArray(j) ? j.length : 0);
+      note = ` (${n} 条)`;
+    } catch { /* 读不懂就不报条数 */ }
+    console.log(`[build] 保留 ${side.name}${note}`);
   }
 
   const size = (dir) => {

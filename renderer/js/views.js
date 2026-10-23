@@ -12,6 +12,9 @@
     heart: '<path fill="currentColor" d="M12 21s-8-5.1-8-11a4.6 4.6 0 018-3.1A4.6 4.6 0 0120 10c0 5.9-8 11-8 11z"/>',
     heartOutline: '<path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 19.5C9.7 18 5.5 14.6 5.5 10.4A3.9 3.9 0 0112 7.7a3.9 3.9 0 016.5 2.7c0 4.2-4.2 7.6-6.5 9.1z"/>',
     download: '<path fill="currentColor" d="M11 3h2v9h3l-4 4-4-4h3zM5 18h14v2H5z"/>',
+    // 云盘页右上角的搜索、底部上传条（用户 m05718）
+    search: '<path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M10.5 4a6.5 6.5 0 014.9 10.8l4.4 4.4-1.4 1.4-4.4-4.4A6.5 6.5 0 1110.5 4zm0 2a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"/>',
+    upload: '<path fill="currentColor" d="M11 16h2V8.8l3 3 1.4-1.4L12 5l-5.4 5.4 1.4 1.4 3-3zM5 18h14v2H5z"/>',
     next: '<path fill="currentColor" d="M15 6h2v12h-2zM5 18V6l9 6z"/>',
     comment: '<path fill="currentColor" d="M4 4h16v12H8l-4 4z"/>',
     album: '<path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 13a3 3 0 110-6 3 3 0 010 6z"/>',
@@ -851,6 +854,198 @@
   // ============================================================
 
   const views = {
+    // ---------------- 音乐云盘 ----------------
+    /**
+     * 音乐云盘（用户 m05071 第④点）。
+     *
+     * 数据只有一条 `/api/cloud/get`（见 endpoints.cloudSongs），列表就是云盘里
+     * 用户上传的歌。这里**只读**：上传/删除都不做，云盘里是用户自己的音频，
+     * 一个误触就可能删掉原文件，代价远大于「少一个按钮」的方便。
+     *
+     * 头部用 `.daily-head` 那套现成样式（日期块 + 文案 + 播放全部），和每日推荐
+     * 长得一致，不额外加 CSS；统计里给「已用 / 总容量」，这两项只有云盘接口
+     * 会回（`size` / `maxSize`）。
+     */
+    async cloud(root) {
+      if (!store.loggedIn) {
+        root.innerHTML = `<div class="page">${emptyState('登录后查看音乐云盘', '云盘里是你上传到网易云的音乐，登录后就能在这里播放')}</div>`;
+        const btn = U.el('<button class="btn-primary" style="width:180px;margin:0 auto;display:block">立即登录</button>');
+        btn.addEventListener('click', () => App.openLogin());
+        root.querySelector('.empty').appendChild(btn);
+        return;
+      }
+
+      root.innerHTML = `<div class="page">
+        <div class="page-head"><div class="page-title">音乐云盘</div></div>
+        ${skeletonTracks(8)}
+      </div>`;
+
+      try {
+        const d = await svc.cloudSongs(500, 0);
+        const songs = d.songs || [];
+        const badge = document.getElementById('cloudCount');
+        if (badge) badge.textContent = d.count ? U.fmtCount(d.count) : '';
+
+        const used = U.fmtSize(d.size || 0);
+        const total = d.maxSize ? U.fmtSize(d.maxSize) : '';
+        const count = d.count || songs.length;
+        // 和「已下载音乐」页同一套口径：共 n 首 · 云盘占用 a / b（用户 m05942 第③点）
+        const sub = `共 ${count} 首 · 云盘占用 ${used}${total ? ` / ${total}` : ''}`;
+
+        // 右上角搜索、下方上传条（用户 m05718）。搜索是**在已经取回来的列表里过滤**，
+        // 不再打接口：云盘一次最多也就几千首，本地过滤即时出结果，也不会因为
+        // 关键词被当成搜索歌名而跑到「搜索页」去。
+        root.querySelector('.page').innerHTML = `
+          <div class="page-head cloud-head">
+            <div class="page-title">音乐云盘</div>
+            <button class="btn-outline cloud-search-btn" id="cloudSearchBtn" title="在云盘里搜索">${icon(ICON.search, 16)}<span>搜索</span></button>
+          </div>
+          <div class="daily-head">
+            <div class="daily-date">
+              <div class="daily-day">${songs.length ? d.count || songs.length : '—'}</div>
+              <div class="daily-mon">首 · 云盘</div>
+            </div>
+            <div class="daily-txt">
+              <h2>你上传到云端的音乐</h2>
+              <p>${U.esc(sub)}</p>
+            </div>
+            <div class="cloud-actions">
+              <span class="cloud-up-state" id="cloudUploadText"></span>
+              <button class="btn-play-all" id="cloudPlayAll"${songs.length ? '' : ' disabled'}>${icon(ICON.play, 14)}播放全部</button>
+              <button class="btn-outline cloud-upload-btn" id="cloudUploadBtn" title="选择本地音频上传到云盘">${icon(ICON.upload, 15)}<span>上传</span></button>
+            </div>
+          </div>
+          <!-- 搜索栏在大框框下面一行（用户 m05942 第⑤点）：点右上角「搜索」才展开 -->
+          <div class="cloud-search" id="cloudSearchWrap" hidden>
+            <input class="cloud-search-input" id="cloudSearchInput" type="text" placeholder="在云盘里搜索歌名 / 歌手 / 专辑" autocomplete="off" spellcheck="false">
+            <span class="cloud-search-count" id="cloudSearchCount"></span>
+          </div>
+          <div id="cloudList"></div>`;
+
+        const listBox = root.querySelector('#cloudList');
+        const playAll = root.querySelector('#cloudPlayAll');
+
+        /** 把一组歌画进列表；空的时候给一句能看懂的空态。 */
+        const paint = (list) => {
+          listBox.innerHTML = '';
+          if (!list.length) {
+            listBox.innerHTML = songs.length
+              ? emptyState('没有匹配的歌', '换个关键词试试，也可以清空搜索框看全部')
+              : emptyState('云盘是空的', '点下面的「上传到云盘」把本机的歌传上去');
+          } else {
+            listBox.appendChild(
+              TrackList(list, { context: { id: 'cloud', name: '音乐云盘' } })
+            );
+          }
+          playAll.disabled = !list.length;
+        };
+
+        paint(songs);
+        playAll.addEventListener('click', () => {
+          const list = root.querySelector('#cloudList .tl-row') ? songs : [];
+          if (list.length) player.playList(list, 0, { id: 'cloud', name: '音乐云盘' });
+        });
+
+        // ---------------- 搜索（右上角） ----------------
+        const searchBtn = root.querySelector('#cloudSearchBtn');
+        const searchWrap = root.querySelector('#cloudSearchWrap');
+        const searchInput = root.querySelector('#cloudSearchInput');
+        const searchCount = root.querySelector('#cloudSearchCount');
+
+        /** 按关键词过滤：歌名 / 歌手 / 专辑，「不分大小写」。 */
+        const applyFilter = () => {
+          const q = searchInput.value.trim().toLowerCase();
+          if (!q) {
+            searchCount.textContent = '';
+            paint(songs);
+            return;
+          }
+          const hit = songs.filter((s) => {
+            const album = s.album && typeof s.album === 'object' ? s.album.name || '' : s.album || '';
+            const hay = `${s.name || ''} ${(s.artists || []).map((a) => a.name).join(' ')} ${album}`.toLowerCase();
+            return hay.includes(q);
+          });
+          searchCount.textContent = `${hit.length} / ${songs.length}`;
+          paint(hit);
+        };
+
+        searchBtn.addEventListener('click', () => {
+          const open = searchWrap.hidden;
+          searchWrap.hidden = !open;
+          searchBtn.classList.toggle('on', open);
+          if (open) searchInput.focus();
+          else {
+            searchInput.value = '';
+            applyFilter();
+          }
+        });
+        searchInput.addEventListener('input', applyFilter);
+        searchInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') searchBtn.click();
+        });
+
+        // ---------------- 上传（大框框最右侧，m06183 第①点） ----------------
+        const upBtn = root.querySelector('#cloudUploadBtn');
+        const upText = root.querySelector('#cloudUploadText');
+        const alive = () => document.body.contains(upText);
+
+        const unsub = global.ne.cloud && global.ne.cloud.onProgress
+          ? global.ne.cloud.onProgress((p) => {
+              if (!alive()) return;
+              const prefix = p.count > 1 ? `（${p.index + 1}/${p.count}）` : '';
+              if (p.stage === 'check') upText.textContent = `${prefix}正在校验 ${p.name}…`;
+              else if (p.stage === 'token') upText.textContent = `${prefix}正在准备上传 ${p.name}…`;
+              else if (p.stage === 'upload') {
+                const pct = p.total ? Math.round((p.sent / p.total) * 100) : 0;
+                upText.textContent = `${prefix}正在上传 ${p.name}${pct ? ` ${pct}%` : ''}…`;
+              } else if (p.stage === 'finalize') upText.textContent = `${prefix}正在入库 ${p.name}…`;
+            })
+          : null;
+
+        upBtn.addEventListener('click', async () => {
+          if (!global.ne.cloud) return;
+          upBtn.disabled = true;
+          const oldLabel = upBtn.innerHTML;
+          upBtn.innerHTML = `${icon(ICON.upload, 14)}<span>上传中…</span>`;
+          try {
+            const r = await global.ne.cloud.upload();
+            if (r.canceled) {
+              upText.textContent = '';
+            } else if (!r.ok) {
+              upText.textContent = '';
+              U.toast(r.error || '上传失败');
+            } else {
+              const ok = (r.added || []).length;
+              const bad = (r.failed || []).length;
+              const skip = r.skipped || 0;
+              // 云盘里「标题 + 歌手」都一样的歌不再重复上传（用户 m05942 第②点）
+              if (skip) U.toast(`有 ${skip} 首歌在云盘歌单中已存在，上传时已跳过`);
+              else U.toast(bad ? `已上传 ${ok} 首，失败 ${bad} 首` : `已上传 ${ok} 首`);
+              if (bad) {
+                upText.textContent = `${bad} 首失败：${r.failed.map((f) => `${f.name}（${f.message}）`).join('；')}`;
+              }
+              // 传完自动刷新云盘界面（m06183 第④点）。云盘列表接口有缓存，
+              // 新传的歌偶尔要一两秒才出现，所以过一会儿再补刷一次。
+              if (ok || skip) {
+                unsub && unsub();
+                await views.cloud(root);
+                setTimeout(() => {
+                  if (globalThis.store.route.name === 'cloud') views.cloud(root);
+                }, 1500);
+                return;
+              }
+            }
+          } catch (e) {
+            U.toast('上传失败：' + ((e && e.message) || e));
+          }
+          upBtn.disabled = false;
+          upBtn.innerHTML = oldLabel;
+        });
+      } catch (e) {
+        root.querySelector('.page').innerHTML = `<div class="page-head"><div class="page-title">音乐云盘</div></div>${emptyState('音乐云盘加载失败', api.explain(e))}`;
+      }
+    },
+
     // ---------------- 每日推荐 ----------------
     async daily(root) {
       if (!store.loggedIn) {

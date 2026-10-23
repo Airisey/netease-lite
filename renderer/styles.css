@@ -459,6 +459,40 @@ html[data-skin] .btn-outline.btn-danger:hover:not(:disabled) { background: color
 .btn-outline.on { border-color: var(--accent); color: var(--accent-hi); }
 .btn-outline.on:hover { background: var(--accent-soft); border-color: var(--accent-hi); color: var(--accent-hi); }
 
+/* ---- 音乐云盘页：右上角搜索 + 大框框里的上传（用户 m05718 / m06183） ---- */
+/* 这两个按钮都用 `.btn-outline`，与歌单页、已下载页那一排按钮同尺寸同描边；
+   原来单独写的 `.cloud-icon-btn`（30px 高、12px 字）已经删掉，
+   否则同一页里会出现两种按钮高度（用户 m06286）。 */
+.cloud-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.cloud-search {
+  display: flex; align-items: center; gap: 12px;
+  /* 紧贴大框框下面一行（用户 m05942 第⑤点） */
+  margin: 0 0 14px;
+}
+.cloud-search[hidden] { display: none; }
+.cloud-search-input {
+  flex: 1; height: 36px; padding: 0 14px;
+  border-radius: 18px; border: 1px solid var(--line-2);
+  background: var(--bg-2); color: var(--text-0); font-size: 13px;
+  outline: none; transition: border-color .14s var(--ease);
+}
+.cloud-search-input:focus { border-color: var(--accent); }
+.cloud-search-count { font-size: 12px; color: var(--text-2); min-width: 60px; text-align: right; }
+
+/* 云盘大框框最右侧的操作区：上传状态 + 播放全部 + 上传。
+   用户 m06183 第①点：底部上传窗口去掉，按钮挪进大框框里。
+   用户 m06286：上传按钮与其它按钮（播放全部 / 搜索 / 歌单页那一排）统一成
+   `.btn-outline` 的尺寸与描边，不再单独写一套 `.cloud-icon-btn` 的 30px 小圆角。 */
+.cloud-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.cloud-up-state {
+  font-size: 11.5px; color: var(--text-2); max-width: 240px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cloud-upload-text { font-size: 12px; color: var(--text-2); line-height: 1.5; word-break: break-all; }
+.cloud-upload-btn, .cloud-search-btn { flex: none; }
+.cloud-upload-btn:disabled { opacity: .55; cursor: default; }
+
 /* ---- 歌曲列表 ---- */
 .tracklist { width: 100%; }
 .tl-head, .tl-row {

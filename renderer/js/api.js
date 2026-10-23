@@ -261,6 +261,11 @@
     /** 歌手全部作品的一页：{ songs, total, more }（歌手页「全部歌曲」页签用） */
     async artistAllSongs(id, limit, offset) { return api.raw('artistAllSongs', id, limit, offset); },
     async album(id) { return api.raw('album', id); },
+    /**
+     * 音乐云盘的一页：`{ songs, count, size, maxSize, more }`（m05071 第④点）。
+     * 不走 cached：云盘内容用户随时会在手机上传/删，缓存一分钟就会显得「不对」。
+     */
+    async cloudSongs(limit, offset) { return api.raw('cloudSongs', limit, offset); },
     async artistDetail(id) {
       return api.cached('artist:' + id, 300000, () => api.raw('artistDetail', id));
     },

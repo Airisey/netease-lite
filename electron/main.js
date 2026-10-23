@@ -13,6 +13,7 @@ const fsp = require('node:fs/promises');
 const { Netease, QUALITY } = require('./api/endpoints.js');
 const { Downloader } = require('./download.js');
 const { LocalIndex } = require('./local.js');
+const { uploadFilesSkippingDupes, CLOUD_EXT } = require('./cloud-upload.js');
 
 // ---------------------------------------------------------------- profile dir
 //
@@ -257,7 +258,8 @@ function createWindow() {
       backgroundThrottling: false,
       // 首屏皮肤：preload 把它交给 boot.js，在样式表之前打到 <html data-skin>，
       // 否则切到「现代白」时会先闪一下黑底。
-      additionalArguments: ['--boot-skin=' + (config.skin || 'classic')],
+      // 版本号同理：`app.getVersion()` 只在主进程有，「关于」页要显示它。
+      additionalArguments: ['--boot-skin=' + (config.skin || 'classic'), '--app-version=' + app.getVersion()],
     },
   });
 
@@ -622,7 +624,7 @@ function createMiniWindow(mode) {
       sandbox: false,
       webSecurity: true,
       backgroundThrottling: false,
-      additionalArguments: ['--mini-mode=' + mode, '--boot-skin=' + (config.skin || 'classic')],
+      additionalArguments: ['--mini-mode=' + mode, '--boot-skin=' + (config.skin || 'classic'), '--app-version=' + app.getVersion()],
     },
   });
   if (onTop) win.setAlwaysOnTop(true, 'floating');
@@ -820,6 +822,8 @@ const ALLOWED = new Set([
   'riskQr', 'riskQrStatus',
   // 榜单 / 播客（左侧栏新增的两个入口）
   'toplists', 'podcasts', 'podcastDetail', 'podcastPrograms',
+  // 音乐云盘（m05071 第④点）
+  'cloudSongs',
 ]);
 
 function registerIpc() {
@@ -1272,6 +1276,31 @@ function registerIpc() {
       return res;
     } catch (e) {
       return { ok: false, error: '扫描失败：' + ((e && e.message) || e) };
+    }
+  });
+
+  /**
+   * 上传本地音频到「音乐云盘」（用户 m05718）。
+   *
+   * 弹框多选 → 逐个串行上传，进度通过 `cloud:progress` 推回渲染层。
+   * 返回 `{ ok, added, failed, canceled }`：全部成功时 `failed` 为空数组。
+   */
+  ipcMain.handle('cloud:upload', async () => {
+    if (!mainWindow) return { ok: false, canceled: true };
+    const r = await dialog.showOpenDialog(mainWindow, {
+      title: '选择要上传到音乐云盘的歌曲',
+      defaultPath: app.getPath('music'),
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: '音频', extensions: CLOUD_EXT.map((e) => e.replace('.', '')) }],
+      buttonLabel: '上传',
+    });
+    if (r.canceled || !r.filePaths || !r.filePaths.length) return { ok: false, canceled: true };
+    try {
+      // 云盘里已经有「标题 + 歌手」都一样的歌就跳过（用户 m05942 第②点）
+      const out = await uploadFilesSkippingDupes(ne, r.filePaths, (p) => broadcast('cloud:progress', p));
+      return { ok: true, added: out.added, failed: out.failed, skipped: out.skipped.length, skippedNames: out.skipped };
+    } catch (e) {
+      return { ok: false, error: '上传失败：' + ((e && e.message) || e) };
     }
   });
 

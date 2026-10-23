@@ -18,8 +18,22 @@ function argvValue(prefix) {
 /** '' in the main window, 'v' / 'h' in a floating mini window. */
 const miniMode = argvValue('--mini-mode=');
 const bootSkin = argvValue('--boot-skin=') || 'classic';
+/**
+ * 应用版本号（用户 m05071 第⑤点：设置里的「关于」要显示 1.1.0）。
+ *
+ * 和皮肤一样从 argv 带进来而不是走 IPC：`app.getVersion()` 读的是 package.json，
+ * 主进程在窗口创建时就有值，同步拿到比页面渲染完再异步补一个数字简单得多，
+ * 「关于」页也就不会先闪一下旧版本号。
+ */
+const appVersion = argvValue('--app-version=');
+const REPO_DESKTOP = 'https://github.com/Airisey/netease-lite';
+const REPO_ANDROID = 'https://github.com/Airisey/netease-lite-android';
 
 contextBridge.exposeInMainWorld('ne', {
+  /** 版本号与两个仓库地址（「关于」页用），见上面的注释。 */
+  appVersion,
+  repo: { desktop: REPO_DESKTOP, android: REPO_ANDROID },
+
   /** Invoke a whitelisted API method. Resolves to the raw result, throws on error. */
   async call(method, ...args) {
     const res = await ipcRenderer.invoke('api', { method, args });
@@ -165,6 +179,21 @@ contextBridge.exposeInMainWorld('ne', {
       const h = (_e, payload) => cb(payload);
       ipcRenderer.on('local:progress', h);
       return () => ipcRenderer.removeListener('local:progress', h);
+    },
+  },
+
+  /**
+   * 音乐云盘的上传（用户 m05718）。
+   *
+   * `upload()` 弹系统文件框并开始传，返回 `{ ok, added, failed, canceled }`；
+   * 进度走 `onProgress`：`{ stage, index, count, name, sent, total }`。
+   */
+  cloud: {
+    upload: () => ipcRenderer.invoke('cloud:upload'),
+    onProgress: (cb) => {
+      const h = (_e, payload) => cb(payload);
+      ipcRenderer.on('cloud:progress', h);
+      return () => ipcRenderer.removeListener('cloud:progress', h);
     },
   },
 

@@ -777,6 +777,57 @@ class Netease extends NeteaseClient {
     };
   }
 
+  /**
+   * 音乐云盘列表（用户 m05071 第④点）。
+   *
+   * 走 `/api/cloud/get`：实测 `limit` / `offset` / `all` 三个参数都认，返回
+   * `{ data, count, size, maxSize, hasMore }` —— `count` 是云盘里一共几首、
+   * `size` / `maxSize` 是已用 / 总容量字节数，云盘页的头部统计就靠它们。
+   *
+   * `data[]` 的每一项是云盘记录（`songId` / `songName` / `artist` / `album` /
+   * `fileSize` / `bitrate` / `simpleSong`），`simpleSong` 里是完整的歌曲对象，
+   * 所以优先用它归一化；万一服务端没给，就按记录里的字段拼一个，至少能显示、
+   * 能播（`id` 就是 `songId`，播放走正常取流接口）。
+   */
+  async cloudSongs(limit = 100, offset = 0) {
+    if (limit && typeof limit === 'object') {
+      offset = limit.offset || 0;
+      limit = limit.limit || 100;
+    }
+    const j = await this.tryGet('/api/cloud/get', { limit, offset });
+    const list = Array.isArray(j.data) ? j.data : [];
+    const songs = list.map((it) => {
+      if (it.simpleSong && it.simpleSong.id) {
+        const s = normalizeSong(it.simpleSong);
+        // 云盘记录上的文件信息比歌曲本身更准（用户上传的是什么就是什么）
+        s.cloudSize = it.fileSize || 0;
+        s.cloudBitrate = it.bitrate || 0;
+        s.cloudAddTime = it.addTime || 0;
+        return s;
+      }
+      return {
+        id: it.songId,
+        name: it.songName || it.fileName || '',
+        artists: [{ id: 0, name: it.artist || '未知歌手' }],
+        artistText: it.artist || '未知歌手',
+        album: { id: 0, name: it.album || '' },
+        albumName: it.album || '',
+        duration: it.songId ? 0 : 0,
+        cover: it.album?.picUrl || '',
+        cloudSize: it.fileSize || 0,
+        cloudBitrate: it.bitrate || 0,
+        cloudAddTime: it.addTime || 0,
+      };
+    });
+    return {
+      songs,
+      count: Number.isFinite(j.count) ? j.count : songs.length,
+      size: Number(j.size) || 0,
+      maxSize: Number(j.maxSize) || 0,
+      more: j.hasMore === undefined ? songs.length >= limit : !!j.hasMore,
+    };
+  }
+
   async album(id) {
     const j = await this.tryGet('/api/v1/album/' + id);
     return {

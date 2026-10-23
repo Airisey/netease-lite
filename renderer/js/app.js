@@ -2263,14 +2263,52 @@
         if (r.skippedLocal) why.push(`${r.skippedLocal} 首本地已有`);
         if (r.skippedQueued) why.push(`${r.skippedQueued} 首已在队列`);
         const tail = why.length ? `（${why.join('、')}，已跳过）` : '';
+        if (r.skippedLocal) {
+          // 用户 m05942 第①点要求的原文：把「去哪儿补下」说清楚，
+          // 而不是只丢一句「已存在」。桌面端只要一句话，不再弹二次确认。
+          U.toast(
+            `有 ${r.skippedLocal} 首歌在歌单中已存在，若仍要下载，请点击顶部提示的文件夹按钮到已下载音乐中右键点击歌曲下载无损`
+          );
+          if (n) U.toastOk(`${n} 首已加入下载`);
+          return;
+        }
         if (!n) {
           if (why.length) U.toast(`这些歌都已经在本地或队列里了${tail}`);
           else U.toast('没有可加入下载的歌曲');
           return;
         }
         U.toastOk(`${n} 首已加入下载${tail}`);
+        // 用户 m05942 第④点：歌单里混着无版权的歌时，事后统一说一声「几首没下成」。
+        // 不在这里逐首判版权（那要多打一轮接口，还会误伤会员曲），
+        // 而是等这批任务落地后按真实报错统计。
+        this.watchBatchErrors(list);
       } catch (e) {
         U.toastErr('加入下载队列失败');
+      }
+    },
+
+    /**
+     * 盯一批刚加入队列的歌，等它们全部落地后统计「因为没版权/只有试听」失败的条数。
+     *
+     * 只在整批都结束（done / error / canceled）时才说话，中途暂停不算 —— 用户
+     * 自己按的暂停不是「下不了」。轮询读 `store.dlTasks`（`download:list` 事件
+     * 一直在维护它），不额外开监听，页面切走也不会漏。
+     */
+    async watchBatchErrors(songs) {
+      const want = new Set((songs || []).map((s) => Number(s && s.id)).filter(Boolean));
+      if (!want.size) return;
+      const deadline = Date.now() + 30 * 60 * 1000;
+      while (Date.now() < deadline) {
+        const tasks = (this._dlTasks || []).filter((t) => want.has(Number(t.songId)));
+        const live = tasks.some((t) => t.state === 'queued' || t.state === 'running');
+        if (tasks.length && !live) {
+          const bad = tasks.filter(
+            (t) => t.state === 'error' && /无版权|下架|试听|会员|付费/.test(String(t.error || ''))
+          ).length;
+          if (bad) U.toast(`${bad} 首因无版权无法下载`);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 1500));
       }
     },
 
