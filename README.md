@@ -45,6 +45,14 @@ node scripts\build.js [输出目录]
 
 默认输出到 `D:\down\Tools\FromAI\网易云音乐 Lite`，也可以设环境变量 `NETEASE_LITE_DIST` 覆盖。构建会保留成品目录里已有的 `resources\app\data\config.json`（登录态、音质、音量）与 `local-index.json`、`download-history.json`（本地索引、下载记录），重建不掉登录，也不会把「已下载音乐」清空。
 
+要压成发给别人的 zip，用：
+
+```powershell
+node scripts\pack-zip.js
+```
+
+它会排除 `resources\app\data\`（登录 Cookie、本地索引、下载记录都在里面），压完再自检一遍，发现 data 条目就删包报错 —— 别手敲 `tar` 直接压整个目录。
+
 ## 登录
 
 扫码最省事；手机号登录支持验证码和密码，密码在本地先 MD5 再发。登录态（Cookie）存在 `data\config.json`，也可以直接粘贴 Cookie。
