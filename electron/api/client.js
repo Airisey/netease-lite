@@ -135,8 +135,35 @@ class NeteaseClient {
     return this._parse(res, path);
   }
 
+  /**
+   * 保证手里有一份 `__csrf`。
+   *
+   * 用户 m06618 第①点：收藏 / 取消收藏歌单必定失败，服务端回
+   * `403 {"message":"illegal request!"}`。实测（`_probe/probe-sub-0*.cjs`）：
+   * 我们保存的 cookie 只有 `MUSIC_U` 与 `NMTID`，`__csrf` 一直是空串，
+   * 于是 `post()` 拼出来的 `?csrf_token=` 就是空的；`/playlist/subscribe`
+   * 与 `/playlist/unsubscribe` 会校验 csrf，空值直接 403。同一个账号下
+   * `/song/like` 却能成功 —— 它不校验 csrf，所以之前一直没暴露这个问题。
+   *
+   * `__csrf` 是服务端下发的，不是客户端能算出来的：带 cookie GET
+   * `https://music.163.com/discover` 会连发两条 `Set-Cookie: __csrf=…`
+   * （不带 cookie 只发 `NMTID`；`/` 首页则什么都不发）。`_fetch` 里的
+   * `_absorb` 会把它们收进 jar，所以这里只要把请求发出去就行。
+   */
+  async ensureCsrf(force = false) {
+    if (!force && this.csrf) return this.csrf;
+    try {
+      const res = await this._fetch(`${BASE}/discover`, { method: 'GET' });
+      // 页面本身没用，读掉响应体好让连接复用。
+      await res.arrayBuffer();
+    } catch { /* 拿不到就继续用空 csrf，让上层照常报错 */ }
+    return this.csrf;
+  }
+
   /** Encrypted POST against /weapi/. */
   async post(path, data = {}, lenient = false) {
+    // 写操作（收藏歌单、建歌单等）要求 csrf_token，缺了就 403 "illegal request!"。
+    if (!this.csrf && this.isLoggedIn) await this.ensureCsrf();
     const url = `${BASE}/weapi/${path.replace(/^\/?weapi\//, '').replace(/^\//, '')}?csrf_token=${this.csrf}`;
     const body = new URLSearchParams(weapi(data)).toString();
     const res = await this._fetch(url, {
