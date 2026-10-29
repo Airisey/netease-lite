@@ -387,11 +387,13 @@
     <h2>需要安全验证</h2>
     <p class="verify-tip" id="verifyTip">用手机上的网易云音乐 App 扫描下方二维码，完成验证后即可关注。</p>
     <div class="qr-wrap verify-qr">
+      <canvas id="verifyQrCanvas" width="180" height="180" hidden></canvas>
       <img id="verifyQrImg" alt="安全验证二维码" hidden>
       <div class="qr-mask" id="verifyQrMask"><div class="qr-mask-inner" id="verifyQrMaskText">二维码加载中…</div></div>
     </div>
     <button class="verify-refresh" id="verifyRefresh">刷新二维码</button>
     <button class="verify-refresh" id="verifyOpenUrl" hidden>在浏览器里打开验证页</button>
+    <button class="verify-refresh" id="verifyQrLogin" hidden>改用扫码登录</button>
     <button class="btn-side verify-done-btn" id="verifyDone">我已完成验证</button>
   </div>
 </div>

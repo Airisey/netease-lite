@@ -139,25 +139,83 @@ class Netease extends NeteaseClient {
     }
   }
 
+  /**
+   * 让请求看起来像 PC 网页端。
+   *
+   * 官方接口库（NeteaseCloudMusicApi 的 `login_cellphone.js`）在登录前会
+   * `query.cookie.os = 'pc'`，短信登录这条链路上的两个接口也走的是网页端那份
+   * 通行证。我们自己的 jar 里只有 MUSIC_U / NMTID，缺这个标识，服务端看到的
+   * 就是一个「什么客户端都不是」的陌生会话，风控（-462）更容易直接命中。
+   */
+  _ensureOsCookie() {
+    if (!this.cookies.has('os')) this.cookies.set('os', 'pc');
+  }
+
   /** ---- phone + captcha (sms) ---- */
   async sendCaptcha(phone, countrycode = '86') {
+    this._ensureOsCookie();
     return this.post('/sms/captcha/sent', { cellphone: String(phone), ctcode: String(countrycode) });
   }
 
+  /**
+   * 手机号 + 短信验证码登录。
+   *
+   * 验证码是**服务端**按当前账号/环境下发的，客户端指定不了位数（我们这边现在是
+   * 4 位，官网某些入口是 6 位，都是同一条短信通道的不同策略）。能控制的是「把码提到
+   * 哪个接口去」，历史上有三个口子，不同客户端版本分别用过，**不能只押一个**：
+   *
+   * 1. `/w/login/cellphone`：网易网页端登录页用的口子（官方接口库
+   *    `login_cellphone.js` 就是打它，参数是 `type=1` + `https=true` + 手机号/验证码）。
+   *    要对着官网走，就按这个形状发。
+   * 2. `/login/cellphone` 带 `captcha`：老口子，用户自己的号走这条一直能登进去。
+   * 3. `/sms/captcha/verify`：验证码**校验**接口，校验通过时响应里也带登录态。
+   *
+   * 依次试，谁成功就用谁；三条都失败时抛**最后一条**的真实错误（例如「验证码错误」）。
+   * 一旦撞上 `-462` 且带着 `verifyToken`，立刻返回 `needVerify` 让界面弹安全验证
+   * 二维码 —— 那是账号级风控，换接口没用，但这一步不能吞掉。
+   */
   async loginCaptcha(phone, captcha, countrycode = '86') {
-    try {
-      const j = await this.post('/login/cellphone', {
-        phone: String(phone),
-        captcha: String(captcha),
-        countrycode: String(countrycode),
-        rememberLogin: 'true',
-      });
-      return { code: j.code, profile: j.profile || null };
-    } catch (e) {
-      // 同上：短信验证码登录撞 -462 的概率比密码登录还高（服务端要确认
-      // 「是不是本人在新设备上登录」）。
-      return loginOutcome(e);
+    this._ensureOsCookie();
+    const cc = String(countrycode);
+    const base = {
+      phone: String(phone),
+      captcha: String(captcha),
+      countrycode: cc,
+      rememberLogin: 'true',
+    };
+    const attempts = [
+      ['/w/login/cellphone', { type: '1', https: 'true', ...base }],
+      ['/login/cellphone', { ...base }],
+      ['/sms/captcha/verify', { cellphone: String(phone), ctcode: cc, captcha: String(captcha) }],
+    ];
+
+    const attempt = async ([path, body]) => {
+      try {
+        const j = await this.post(path, body);
+        // 有的实现回 200 但不下发登录态，所以两个条件都要看。
+        if (j.code === 200 || this.isLoggedIn) {
+          return { done: { code: 200, profile: j.profile || null } };
+        }
+        return { fail: { code: j.code, message: j.message || '登录失败', payload: j } };
+      } catch (e) {
+        try {
+          const r = loginOutcome(e);
+          if (r && r.needVerify) return { done: r };
+        } catch (ignored) { /* 不是 -462：记下错误，继续试下一个口子 */ }
+        return { fail: { code: e.code, message: e.message || '登录失败', payload: e.payload } };
+      }
+    };
+
+    let last = null;
+    for (const a of attempts) {
+      const r = await attempt(a);
+      if (r.done) return r.done;
+      last = r.fail;
     }
+    const err = new Error(last.message);
+    err.code = last.code;
+    err.payload = last.payload;
+    throw err;
   }
 
   async logout() {
@@ -1019,7 +1077,9 @@ function followOutcome(e, kind) {
  */
 function loginOutcome(e) {
   const payload = e && e.payload;
-  const d = (payload && payload.data) || null;
+  // 有的接口把安全验证参数放在 `data` 里，有的直接摊在顶层 —— 两个形状都认，
+  // 否则用户只会看到一句「请确认是否本人账号」，而弹窗（换二维码那条路）不出现。
+  const d = (payload && (payload.data || payload)) || null;
   if (e && e.code === -462 && d && d.verifyToken) {
     return {
       ok: false,

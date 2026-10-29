@@ -1951,19 +1951,34 @@
      * @param {object} verify  -462 带回的验证参数
      * @param {Function} [retry] 验证完成后重试的动作（再点一次关注 / 再登录一次）
      * @param {string} [tip] 没有 blockText 时显示的说明（登录与关注的说法不一样）
+     * @param {object} [opts] `allowQrLogin: true` 时多给一个「改用扫码登录」的出口
      */
-    openVerify(verify, retry, tip) {
-      if (!verify || !verify.verifyToken) return;
-      this._verify = verify;
+    openVerify(verify, retry, tip, opts = {}) {
+      this._verify = (verify && verify.verifyToken) ? verify : null;
       this._verifyRetry = retry || null;
+      this._verifyAllowQrLogin = !!opts.allowQrLogin;
+      $('#verifyQrLogin').hidden = !this._verifyAllowQrLogin;
       $('#verifyQrMask').hidden = false;
       $('#verifyQrMaskText').textContent = '二维码加载中…';
+      $('#verifyQrCanvas').hidden = true;
       $('#verifyQrImg').hidden = true;
-      $('#verifyTip').textContent = verify.blockText
-        ? verify.blockText
-        : (tip || '用手机上的网易云音乐 App 扫描下方二维码，完成验证后即可继续。');
+      const tipEl = $('#verifyTip');
+      // 以前这里在 `!verify.verifyToken` 时直接 return —— 弹窗压根不出来，而调用方
+      // 已经先写了「需要安全验证：扫码…」的提示，用户面对的就是一个不存在的二维码。
+      // 没有参数是「换一张二维码」也换不出来的，只能把原因说清楚并给出别的路。
+      if (!this._verify) {
+        tipEl.textContent = '这次服务端没带回安全验证参数（常见于当前网络环境被判为有风险）。'
+          + '可以直接关掉这个窗，改用「扫码登录」，或过一会儿再试。';
+        $('#verifyQrMaskText').textContent = '没有拿到验证二维码';
+        $('#verifyRefresh').hidden = true;
+      } else {
+        $('#verifyRefresh').hidden = false;
+        tipEl.textContent = verify.blockText
+          ? verify.blockText
+          : (tip || '用手机上的网易云音乐 App 扫描下方二维码，完成验证后即可继续。');
+      }
       $('#verifyModal').hidden = false;
-      this.loadVerifyQr();
+      if (this._verify) this.loadVerifyQr();
     },
 
     closeVerify() {
@@ -1971,6 +1986,23 @@
       if (this._verifyTimer) { clearTimeout(this._verifyTimer); this._verifyTimer = null; }
       this._verify = null;
       this._verifyRetry = null;
+      this._verifyAllowQrLogin = false;
+      $('#verifyRefresh').hidden = false;
+    },
+
+    /**
+     * 用扫码登录兜底。
+     *
+     * 手机号登录撞 -462 时，服务端给的验证二维码本身就是「拿官方 App 扫一下」；
+     * 而扫码登录（`/login/qr/key`）不需要验证码、也不需要风控参数，是同一个账号
+     * 更短的一条路。拿不到验证二维码时把它摆出来，比让用户干等有用。
+     */
+    switchToQrLogin() {
+      // 已经换成另一种登录方式了，不要再回头重试手机号那一次（验证码是一次性的）。
+      this._verifyRetry = null;
+      this.closeVerify();
+      this.openLogin();
+      this.switchLoginTab('qr');
     },
 
     async loadVerifyQr() {
@@ -1994,16 +2026,39 @@
             urlBtn.hidden = true;
           }
         }
-        // 图片在网易云 CDN 上，走 neimg:// 代理以避开防盗链
+        // 优先在本地自己画：`qrCode` 就是二维码的**内容**（一条官方短链），渲染层
+        // 本来就有二维码生成器（登录二维码用的就是它）。CDN 那张图带防盗链、联网
+        // 环境被判风险时也可能取不到 —— 取不到时用户看到的就是「加载不出二维码」，
+        // 而内容其实一直在我们手里。
+        const canvas = $('#verifyQrCanvas');
         const img = $('#verifyQrImg');
-        img.onload = () => { $('#verifyQrMask').hidden = true; img.hidden = false; };
-        img.onerror = () => {
-          $('#verifyQrMaskText').textContent = '二维码图片加载失败，可点「刷新二维码」重试';
-        };
-        img.src = global.ne.img(r.imageUrl);
+        let drawn = false;
+        try {
+          if (r.qrCode && typeof QR !== 'undefined') {
+            QR.draw(canvas, r.qrCode, { size: 180, margin: 4 });
+            canvas.hidden = false;
+            img.hidden = true;
+            drawn = true;
+          }
+        } catch (e) {
+          console.warn('[app] verify qr draw', e);
+        }
+        if (!drawn) {
+          // 退路：CDN 图片，走 neimg:// 代理以避开防盗链
+          img.onload = () => { $('#verifyQrMask').hidden = true; img.hidden = false; };
+          img.onerror = () => {
+            $('#verifyQrMaskText').textContent = this._verifyUrl
+              ? '二维码图片加载失败，可点「在浏览器里打开验证页」或「刷新二维码」'
+              : '二维码图片加载失败，可点「刷新二维码」重试';
+          };
+          img.src = global.ne.img(r.imageUrl);
+        } else {
+          $('#verifyQrMask').hidden = true;
+        }
         this.pollVerifyQr();
       } catch (e) {
-        $('#verifyQrMaskText').textContent = '二维码获取失败：' + api.explain(e);
+        $('#verifyQrMaskText').textContent = '二维码获取失败：' + api.explain(e)
+          + (this._verifyAllowQrLogin ? '（可点下面的「改用扫码登录」）' : '');
       }
     },
 
@@ -2047,6 +2102,7 @@
         this.closeVerify();
         if (retry) await retry();
       });
+      $('#verifyQrLogin').addEventListener('click', () => this.switchToQrLogin());
     },
 
     bindLoginModal() {
@@ -2107,8 +2163,9 @@
             // 桌面端对「关注」早就会弹二维码，登录这条路原来只丢一句
             // api.explain 出来的「需要先完成手机号或短信验证」，用户不知道该去哪儿验证。
             this.openVerify(r.verify, () => $('#btnPhoneLogin').click(),
-              '网易云要求先确认是本人登录（换设备、短信验证码登录时常见）。用手机上的网易云音乐 App 扫码，或点弹窗里的验证链接，完成后会自动重试登录。');
-            err.textContent = '需要安全验证：扫码或点验证链接完成，然后会自动重试登录。';
+              '网易云要求先确认是本人登录（换设备、短信验证码登录时常见）。用手机上的网易云音乐 App 扫码，或点弹窗里的验证链接，完成后会自动重试登录。',
+              { allowQrLogin: true });
+            err.textContent = '需要安全验证：扫码或点验证链接完成，然后会自动重试登录；拿不到二维码就点弹窗里的「改用扫码登录」。';
             return;
           }
           await this.afterLoginSuccess();

@@ -1,7 +1,7 @@
 {
   "name": "netease-lite",
   "productName": "网易云音乐 Lite",
-  "version": "1.1.1",
+  "version": "1.1.5",
   "description": "A lightweight third-party NetEase Cloud Music client for Windows",
   "main": "electron/main.js",
   "author": "dsh",
