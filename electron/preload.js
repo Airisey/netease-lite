@@ -19,7 +19,7 @@ function argvValue(prefix) {
 const miniMode = argvValue('--mini-mode=');
 const bootSkin = argvValue('--boot-skin=') || 'classic';
 /**
- * 应用版本号（用户 m05071 第⑤点：设置里的「关于」要显示 1.1.0）。
+ * 应用版本号（用户 m05071 第⑤点：设置里的「关于」要显示真实版本号）。
  *
  * 和皮肤一样从 argv 带进来而不是走 IPC：`app.getVersion()` 读的是 package.json，
  * 主进程在窗口创建时就有值，同步拿到比页面渲染完再异步补一个数字简单得多，
